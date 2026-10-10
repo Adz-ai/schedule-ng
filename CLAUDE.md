@@ -32,12 +32,16 @@ an in-process job scheduler in a single module, `schedule_ng/__init__.py`, with 
 ## Commands
 
 ```bash
-uv run pytest                    # tests (also run without pytz: they skip cleanly)
+uv run pytest --cov              # tests; fails below 100% line and branch coverage
 uv run ruff check                # lint
 uv run ruff format --check       # formatting
 uv run mypy                      # types
 uv run --only-group docs --with-editable . sphinx-build -W -b html docs docs/_build/html
 ```
+
+Coverage stays at 100%, but never write a test just to execute a line. Each test should
+check behaviour a user could notice and fail if that behaviour broke. If a line can't be
+reached, delete it; don't add `# pragma: no cover`.
 
 CI must stay green on Linux, macOS and Windows for Python 3.11 to 3.15, including the free-threaded builds.
 Code must run on the oldest supported Python (`requires-python` in `pyproject.toml`). Python versions

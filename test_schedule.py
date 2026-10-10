@@ -1492,6 +1492,11 @@ class SchedulerTests(TestCase):
         schedule.run_all()
         mock_job.assert_called_once_with(1, 2, "three", foo=23, bar={})
 
+    def test_do_without_scheduler(self):
+        job = schedule.Job(1).second
+        with self.assertRaisesRegex(ScheduleError, "not associated with an scheduler"):
+            job.do(make_mock_job())
+
     def test_to_string(self):
         def job_fun():
             pass
@@ -1700,6 +1705,12 @@ class SchedulerTests(TestCase):
             schedule.cancel_job(job)
             assert schedule.next_run() is None
             assert schedule.idle_seconds() is None
+
+    def test_idle_seconds_with_unscheduled_job(self):
+        # schedule 1.2 returned None here rather than raising; keep that.
+        scheduler = schedule.Scheduler()
+        scheduler.jobs.append(schedule.Job(1, scheduler))
+        assert scheduler.idle_seconds is None
 
     def test_cancel_job(self):
         def stop_job():
