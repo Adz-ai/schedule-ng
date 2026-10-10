@@ -32,6 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          cache-suffix: ${{ github.job }}
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy
@@ -41,6 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          cache-suffix: ${{ github.job }}
       - run: uv run --only-group docs --with-editable . sphinx-build -W -b html docs docs/_build/html
 
   build:
@@ -48,6 +52,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          cache-suffix: ${{ github.job }}
       - run: uv build
       - run: uvx twine check --strict dist/*
 
