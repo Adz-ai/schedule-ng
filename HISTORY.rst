@@ -12,6 +12,7 @@ History
 - Document the Python support policy: every Python version that has not
   reached its end of life is supported, and a version is dropped in the first
   minor release after its end-of-life date.
+- ``run_all(delay_seconds)`` only waits between jobs, not after the last one.
 
 1.3.1 (2026-10-10)
 ++++++++++++++++++
