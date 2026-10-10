@@ -44,6 +44,7 @@ import functools
 import logging
 import random
 import re
+import threading
 import time
 from collections.abc import Callable
 from typing import Any, Self, TypeVar
@@ -88,6 +89,19 @@ class Scheduler:
 
     def __init__(self) -> None:
         self.jobs: list[Job] = []
+        # Serializes run_pending() so that several threads polling the same
+        # scheduler don't run a due job more than once. Re-entrant, so a job
+        # may call run_pending() itself.
+        self._lock = threading.RLock()
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        del state["_lock"]  # locks can't be pickled or copied
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._lock = threading.RLock()
 
     def run_pending(self) -> None:
         """
@@ -98,10 +112,14 @@ class Scheduler:
         that should run every minute and you only call run_pending()
         in one hour increments then your job won't be run 60 times in
         between but only once.
+
+        It is safe to call run_pending() on the same scheduler from several
+        threads: a due job runs once.
         """
-        runnable_jobs = (job for job in self.jobs if job.should_run)
-        for job in sorted(runnable_jobs):
-            self._run_job(job)
+        with self._lock:
+            runnable_jobs = (job for job in self.jobs if job.should_run)
+            for job in sorted(runnable_jobs):
+                self._run_job(job)
 
     def run_all(self, delay_seconds: float = 0) -> None:
         """
