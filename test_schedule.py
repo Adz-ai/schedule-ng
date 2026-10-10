@@ -255,6 +255,19 @@ class SchedulerTests(TestCase):
         job_instance.latest = 3
         self.assertRaises(ScheduleError, job_instance._schedule_next_run)
 
+    def test_error_messages(self):
+        with self.assertRaisesRegex(
+            ScheduleValueError,
+            r"^Invalid number of hours \(25 is not between 0 and 23\)$",
+        ):
+            every().day.at("25:00")
+
+        job = every(5).to(2).seconds
+        with self.assertRaisesRegex(
+            ScheduleError, r"^`latest` \(2\) is smaller than `interval` \(5\)$"
+        ):
+            job.do(make_mock_job())
+
     def test_next_run_with_tag(self):
         with mock_datetime(2014, 6, 28, 12, 0):
             job1 = every(5).seconds.do(make_mock_job(name="job1")).tag("tag1")

@@ -540,7 +540,7 @@ class Job:
             hour = int(hour)
             if not (0 <= hour <= 23):
                 raise ScheduleValueError(
-                    "Invalid number of hours ({} is not between 0 and 23)"
+                    "Invalid number of hours ({} is not between 0 and 23)".format(hour)
                 )
         elif self.unit == "hours":
             hour = 0
@@ -722,7 +722,11 @@ class Job:
             )
         if self.latest is not None:
             if not (self.latest >= self.interval):
-                raise ScheduleError("`latest` is greater than `interval`")
+                raise ScheduleError(
+                    "`latest` ({}) is smaller than `interval` ({})".format(
+                        self.latest, self.interval
+                    )
+                )
             interval = random.randint(self.interval, self.latest)
         else:
             interval = self.interval
