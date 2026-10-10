@@ -520,8 +520,9 @@ class Job:
 
         After seconds, minutes or hours, as in ``every(5).minutes.weekday``,
         the job keeps its interval, but a run that would fall on a Saturday
-        or Sunday (in local time) moves to midnight on Monday, or to the
-        first time given to :meth:`at` after it.
+        or Sunday moves to midnight on Monday, or to the first time given to
+        :meth:`at` after it. Days follow the timezone given to :meth:`at`,
+        or local time.
         """
         return self._on_days(_WEEKDAYS, "weekday")
 
@@ -881,22 +882,21 @@ class Job:
     def _skip_excluded_days(self, moment: datetime.datetime) -> datetime.datetime:
         """
         Move a run that falls on a day excluded by .weekday or .weekend to
-        the start of the next allowed day, in local time.
+        the start of the next allowed day, in the timezone of at().
         """
         assert self._days is not None
-        day = _wall_clock(moment, None).date()
+        day = _wall_clock(moment, self.at_time_zone).date()
         if day.weekday() in self._days:
             return moment
         while day.weekday() not in self._days:
             day += datetime.timedelta(days=1)
-        start = _localize(datetime.datetime.combine(day, datetime.time()), None)
+        start = _localize(
+            datetime.datetime.combine(day, datetime.time()), self.at_time_zone
+        )
         if self.at_time is None:
             return start
-        first = self._at_time_near(start)
-        if first < start:
-            unit = "hours" if self.unit == "hours" else "minutes"
-            first += datetime.timedelta(**{unit: 1})
-        return first
+        # Both are in the timezone of at(), so this is never before `start`.
+        return self._at_time_near(start)
 
     def _is_overdue(self, when: datetime.datetime) -> bool:
         if self.cancel_after is None:
