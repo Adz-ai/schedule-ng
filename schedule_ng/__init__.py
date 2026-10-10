@@ -248,9 +248,11 @@ class Job:
     method, which also defines its `interval`.
     """
 
-    # Days of the week (0 is Monday) the job may run on, set by .weekday or
-    # .weekend. A class attribute, so that jobs pickled by 1.4 still load.
-    _days: frozenset[int] | None = None
+    # Set by .weekday, .weekend and .between(). Class attributes, so that
+    # jobs pickled by 1.4 still load.
+    _days: frozenset[int] | None = None  # days of the week, 0 is Monday
+    _window: tuple[str, str] | None = None  # start and end, "HH:MM(:SS)"
+    _window_tz: datetime.tzinfo | None = None
 
     def __init__(self, interval: float, scheduler: Scheduler | None = None) -> None:
         if interval <= 0:
@@ -318,10 +320,11 @@ class Job:
     def __str__(self) -> str:
         job_func_name = self._job_func_name()
 
-        return ("Job(interval={}, unit={}, {}{}do={}, args={}, kwargs={})").format(
+        return ("Job(interval={}, unit={}, {}{}{}do={}, args={}, kwargs={})").format(
             self.interval,
             self.unit,
             "" if self._days is None else "on={}, ".format(self._days_name()),
+            "" if self._window is None else "between={}-{}, ".format(*self._window),
             "" if self.at_time is None else "at={}, ".format(self.at_time),
             job_func_name,
             "()" if self.job_func is None else self.job_func.args,
@@ -350,6 +353,8 @@ class Job:
             call_repr = "[None]"
 
         days = "" if self._days is None else " on " + self._days_name()
+        if self._window is not None:
+            days += " between %s and %s" % self._window
 
         if self.at_time is not None:
             return "Every %s %s%s at %s do %s %s" % (
@@ -521,8 +526,8 @@ class Job:
         After seconds, minutes or hours, as in ``every(5).minutes.weekday``,
         the job keeps its interval, but a run that would fall on a Saturday
         or Sunday moves to midnight on Monday, or to the first time given to
-        :meth:`at` after it. Days follow the timezone given to :meth:`at`,
-        or local time.
+        :meth:`at` after it. Days follow the timezone given to :meth:`between`,
+        or else to :meth:`at`, or local time.
         """
         return self._on_days(_WEEKDAYS, "weekday")
 
@@ -647,6 +652,48 @@ class Job:
             self.at_time_zone = _parse_timezone(tz)
 
         self.at_time = at_time
+        return self
+
+    def between(
+        self, start: str, end: str, tz: str | datetime.tzinfo | None = None
+    ) -> Self:
+        """
+        Only run the job between two times of day, for example
+        ``every(5).minutes.between("09:00", "17:00")``.
+
+        Inside the window the job keeps its interval. A run that would fall
+        outside it moves to the next start of the window (or to the first
+        time given to :meth:`at` after it). Only for seconds, minutes and
+        hours.
+
+        :param start: The start of the window, as `HH:MM:SS` or `HH:MM`.
+        :param end: The end of the window, which is included: an end of
+            ``"17:00"`` includes 17:00:59. If it is earlier than `start`, the
+            window crosses midnight, and belongs to the day it starts on
+            for :attr:`weekday` and :attr:`weekend`: with ``"22:00"`` and
+            ``"06:00"``, Monday 01:00 belongs to Sunday's window.
+        :param tz: The timezone of `start` and `end`, given as for
+            :meth:`at`. Local time is used if omitted.
+
+        :return: The invoked job instance
+        """
+        if self.unit not in ("seconds", "minutes", "hours"):
+            raise ScheduleValueError(
+                "between() is only allowed for seconds, minutes and hours"
+            )
+        for time_str in (start, end):
+            if not isinstance(time_str, str):
+                raise TypeError("between() should be passed strings")
+            if not re.match(r"^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$", time_str):
+                raise ScheduleValueError(
+                    "Invalid time format for between() (valid format is HH:MM(:SS)?)"
+                )
+        if datetime.time.fromisoformat(start) == datetime.time.fromisoformat(end):
+            raise ScheduleValueError("between() needs different start and end times")
+        window_tz = None if tz is None else _parse_timezone(tz)
+
+        self._window = (start, end)
+        self._window_tz = window_tz
         return self
 
     def to(self, latest: float) -> Self:
@@ -861,8 +908,8 @@ class Job:
                 next_run += period
             while next_run <= now:
                 next_run += period
-            if self._days is not None:
-                next_run = self._skip_excluded_days(next_run)
+            if self._days is not None or self._window is not None:
+                next_run = self._move_into_window(next_run)
 
         self._next_run = next_run
 
@@ -879,24 +926,53 @@ class Job:
             current = current.replace(minute=self.at_time.minute)
         return current.astimezone(_UTC)
 
-    def _skip_excluded_days(self, moment: datetime.datetime) -> datetime.datetime:
+    def _move_into_window(self, moment: datetime.datetime) -> datetime.datetime:
         """
-        Move a run that falls on a day excluded by .weekday or .weekend to
-        the start of the next allowed day, in the timezone of at().
+        Move a run that falls outside the .between() window, or on a day
+        excluded by .weekday or .weekend, to the first run in the next
+        window. Without .between(), the window is the whole day in the
+        timezone of at().
         """
-        assert self._days is not None
-        day = _wall_clock(moment, self.at_time_zone).date()
-        if day.weekday() in self._days:
-            return moment
-        while day.weekday() not in self._days:
-            day += datetime.timedelta(days=1)
-        start = _localize(
-            datetime.datetime.combine(day, datetime.time()), self.at_time_zone
+        tz = self.at_time_zone if self._window is None else self._window_tz
+        start, end = self._window or ("00:00", "23:59:59")
+        days = self._days or _ALL_DAYS
+        one_day = datetime.timedelta(days=1)
+        # Usually done after one move; more for a window that falls in a DST
+        # gap, or that has no time given to at() in it.
+        for _ in range(8):
+            wall = _wall_clock(moment, tz)
+            clock = wall.strftime("%H:%M:%S")
+            # Compare at the precision of `end`, so that 17:00 includes 17:00:59.
+            before_end = clock[: len(end)] <= end
+            day = wall.date()
+            if start < end:
+                inside = start <= clock and before_end
+            else:
+                inside = start <= clock or before_end
+                if clock < start:
+                    day -= one_day  # the window started yesterday
+            if inside and day.weekday() in days:
+                return moment
+
+            day = wall.date() if clock < start else wall.date() + one_day
+            while day.weekday() not in days:
+                day += one_day
+            wall_start = datetime.datetime.combine(
+                day, datetime.time.fromisoformat(start)
+            )
+            window_start = _localize(wall_start, tz)
+            if window_start <= moment:
+                # The clocks went back, and `start` is coming round again.
+                window_start = moment + (wall_start - wall)
+            moment = window_start
+            if self.at_time is not None:
+                moment = self._at_time_near(window_start)
+                if moment < window_start:
+                    unit = "hours" if self.unit == "hours" else "minutes"
+                    moment += datetime.timedelta(**{unit: 1})
+        raise ScheduleValueError(
+            "No time given to at() falls inside the window given to between()"
         )
-        if self.at_time is None:
-            return start
-        # Both are in the timezone of at(), so this is never before `start`.
-        return self._at_time_near(start)
 
     def _is_overdue(self, when: datetime.datetime) -> bool:
         if self.cancel_after is None:
@@ -1020,6 +1096,7 @@ _UTC = datetime.timezone.utc
 
 _WEEKDAYS = frozenset(range(5))
 _WEEKEND = frozenset((5, 6))
+_ALL_DAYS = frozenset(range(7))
 
 
 def _parse_timezone(tz: str | datetime.tzinfo) -> datetime.tzinfo:

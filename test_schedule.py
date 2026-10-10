@@ -2238,3 +2238,270 @@ JOB_STATE_1_4 = {
     "tags",
     "scheduler",
 }
+
+
+class BetweenTests(TestCase):
+    # 2024-01-15 is a Monday. Local time is Berlin (CET, UTC+1, in January).
+
+    def setUp(self):
+        schedule.clear()
+
+    def test_runs_inside_window_including_end(self):
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 1, 15, 7, 30, zone=TZ_BERLIN):
+            scheduler.every().hour.between("09:00", "17:00").do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 1, 15, 6, 30), utc(2024, 1, 16, 9)
+        )
+        # 09:00 to 17:00 on Monday, then 09:00 on Tuesday (Berlin time).
+        expected = [utc(2024, 1, 15, hour) for hour in range(8, 17)]
+        self.assertEqual(runs, expected + [utc(2024, 1, 16, 8)])
+
+    def test_first_run_outside_window_waits_for_its_start(self):
+        for start, expected in (
+            ((15, 6, 0), datetime.datetime(2024, 1, 15, 9, 0)),
+            ((15, 12, 0), datetime.datetime(2024, 1, 15, 12, 5)),
+            ((15, 16, 58), datetime.datetime(2024, 1, 16, 9, 0)),
+            ((15, 18, 30), datetime.datetime(2024, 1, 16, 9, 0)),
+        ):
+            with self.subTest(start=start):
+                with mock_datetime(2024, 1, *start):
+                    job = every(5).minutes.between("09:00", "17:00").do(make_mock_job())
+                assert job.next_run == expected
+
+    def test_end_includes_the_whole_minute_or_second_given(self):
+        # Interval jobs drift a little, as each run is scheduled from the
+        # moment it ran.
+        with mock_datetime(2024, 1, 15, 16, 0, 20):
+            minute = every().hour.between("09:00", "17:00").do(make_mock_job())
+            second = every().hour.between("09:00", "17:00:00").do(make_mock_job())
+        assert minute.next_run == datetime.datetime(2024, 1, 15, 17, 0, 20)
+        assert second.next_run == datetime.datetime(2024, 1, 16, 9, 0)
+
+    def test_window_crossing_midnight(self):
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 1, 15, 12, 0, zone=TZ_BERLIN):
+            scheduler.every().hour.between("22:00", "06:00").do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 1, 15, 11), utc(2024, 1, 16, 12)
+        )
+        # 22:00 on Monday to 06:00 on Tuesday (Berlin time).
+        expected = [
+            utc(2024, 1, 15, 21) + datetime.timedelta(hours=h) for h in range(9)
+        ]
+        self.assertEqual(runs, expected)
+
+    def test_window_in_other_timezone(self):
+        # 09:00 in New York is 15:00 in Berlin.
+        with mock_datetime(2024, 1, 15, 12, 0):
+            job = (
+                every(30)
+                .minutes.between("09:00", "17:00", "America/New_York")
+                .do(make_mock_job())
+            )
+        assert job.next_run == datetime.datetime(2024, 1, 15, 15, 0)
+
+    def test_window_start_in_dst_gap(self):
+        # 02:30 does not exist in Berlin on 2024-03-31; the window opens at
+        # 03:30 CEST (01:30 UTC) that day.
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 3, 31, 1, 0, zone=TZ_BERLIN):
+            scheduler.every(20).minutes.between("02:30", "04:00").do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 3, 31, 0), utc(2024, 4, 1, 1)
+        )
+        self.assertEqual(
+            runs,
+            [
+                utc(2024, 3, 31, 1, 30),
+                utc(2024, 3, 31, 1, 50),
+                utc(2024, 4, 1, 0, 30),
+                utc(2024, 4, 1, 0, 50),
+            ],
+        )
+
+    def test_repeated_hour_inside_window(self):
+        # Clocks go back from 03:00 CEST to 02:00 CET on 2024-10-27 (01:00
+        # UTC). Runs keep their spacing; the window ends at 05:00 CET.
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 10, 27, 1, 0, zone=TZ_BERLIN):
+            scheduler.every(30).minutes.between("01:00", "05:00").do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 10, 26, 23), utc(2024, 10, 27, 5)
+        )
+        expected = [
+            utc(2024, 10, 26, 23, 30) + datetime.timedelta(minutes=30 * k)
+            for k in range(10)
+        ]
+        self.assertEqual(runs, expected)
+
+    def test_window_start_in_repeated_hour(self):
+        # 02:45 happens twice on 2024-10-27 in Berlin. After the first one,
+        # the clock leaves the window at 02:00 CET and enters it again at
+        # 02:45 CET (01:45 UTC).
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 10, 27, 2, 0, zone=TZ_BERLIN):
+            scheduler.every(15).minutes.between("02:45", "05:00").do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 10, 27, 0), utc(2024, 10, 27, 4)
+        )
+        expected = [
+            utc(2024, 10, 27, 1, 45) + datetime.timedelta(minutes=15 * k)
+            for k in range(9)
+        ]
+        self.assertEqual(runs, [utc(2024, 10, 27, 0, 45)] + expected)
+
+    def test_with_weekday_filter(self):
+        with mock_datetime(2024, 1, 19, 16, 50):
+            weekday_job = (
+                every(30).minutes.weekday.between("09:00", "17:00").do(make_mock_job())
+            )
+            weekend_job = (
+                every(30).minutes.weekend.between("09:00", "17:00").do(make_mock_job())
+            )
+        assert weekday_job.next_run == datetime.datetime(2024, 1, 22, 9, 0)
+        assert weekend_job.next_run == datetime.datetime(2024, 1, 20, 9, 0)
+
+    def test_window_crossing_midnight_belongs_to_the_day_it_starts(self):
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 1, 19, 12, 0, zone=TZ_BERLIN):
+            scheduler.every().hour.weekday.between("22:00", "06:00").do(make_mock_job())
+        runs = poll_across(
+            scheduler,
+            TZ_BERLIN,
+            utc(2024, 1, 19, 11),
+            utc(2024, 1, 23, 11),
+            step=datetime.timedelta(minutes=30),
+        )
+        # Friday night into Saturday, then Monday night into Tuesday. The
+        # early hours of Monday belong to Sunday's window.
+        hours = [datetime.timedelta(hours=h) for h in range(9)]
+        expected = [utc(2024, 1, 19, 21) + h for h in hours]
+        expected += [utc(2024, 1, 22, 21) + h for h in hours]
+        self.assertEqual(runs, expected)
+
+    def test_window_timezone_decides_the_day(self):
+        # Sunday 23:10 in Berlin is Monday 07:10 in Tokyo.
+        with mock_datetime(2024, 1, 21, 22, 40):
+            job = (
+                every(30)
+                .minutes.weekday.between("07:00", "18:00", ZoneInfo("Asia/Tokyo"))
+                .do(make_mock_job())
+            )
+        assert job.next_run == datetime.datetime(2024, 1, 21, 23, 10)
+
+    def test_window_timezone_wins_over_at_timezone(self):
+        # Without between(), Monday would start in India (19:45 on Sunday
+        # in Berlin); the window is in Berlin time, so it waits for Monday
+        # there, at the first :15 in India after midnight.
+        with mock_datetime(2024, 1, 19, 23, 50):
+            kolkata = ZoneInfo("Asia/Kolkata")
+            job = (
+                every()
+                .hour.at(":15", kolkata)
+                .weekday.between("00:00", "23:59")
+                .do(make_mock_job())
+            )
+        assert job.next_run == datetime.datetime(2024, 1, 22, 0, 45)
+
+    def test_with_at(self):
+        with mock_datetime(2024, 1, 15, 7, 0):
+            hourly = every().hour.at(":30").between("09:00", "17:00")
+            minutely = every().minute.at(":15").between("09:00:30", "10:00")
+            assert hourly.do(make_mock_job()).next_run == datetime.datetime(
+                2024, 1, 15, 9, 30
+            )
+            assert minutely.do(make_mock_job()).next_run == datetime.datetime(
+                2024, 1, 15, 9, 1, 15
+            )
+        with mock_datetime(2024, 1, 15, 16, 30):
+            hourly.run()
+            assert hourly.next_run == datetime.datetime(2024, 1, 16, 9, 30)
+
+    def test_with_at_outside_window_is_rejected(self):
+        with mock_datetime(2024, 1, 15, 7, 0):
+            with self.assertRaisesRegex(ScheduleValueError, "between"):
+                every().hour.at(":30").between("09:00", "09:10").do(make_mock_job())
+
+    def test_with_until(self):
+        mock_job = make_mock_job()
+        with mock_datetime(2024, 1, 15, 16, 0):
+            job = every().hour.between("09:00", "17:00").until("18:00").do(mock_job)
+        # The next run after 17:00 would be on Tuesday, after the deadline.
+        with mock_datetime(2024, 1, 15, 17, 0):
+            schedule.run_pending()
+        assert mock_job.call_count == 1
+        assert job not in schedule.jobs
+
+    def test_only_for_seconds_minutes_and_hours(self):
+        for build in (
+            lambda: every(),
+            lambda: every().day,
+            lambda: every().monday,
+            lambda: every().weekday,
+        ):
+            with self.assertRaises(ScheduleValueError):
+                build().between("09:00", "17:00")
+        for unit in ("seconds", "minutes", "hours"):
+            getattr(every(), unit).between("09:00", "17:00")
+
+    def test_invalid_times(self):
+        for start, end in (
+            ("9:00", "17:00"),
+            ("09:00", "24:00"),
+            ("09:60", "17:00"),
+            ("09:00", "17:00:60"),
+            (":30", "17:00"),
+            ("09:00", "17"),
+            (" 09:00", "17:00"),
+            ("09:00", "09:00"),
+            ("09:00", "09:00:00"),
+        ):
+            with self.subTest(start=start, end=end):
+                with self.assertRaises(ScheduleValueError):
+                    every().hour.between(start, end)
+        with self.assertRaises(TypeError):
+            every().hour.between(900, "17:00")
+        with self.assertRaises(ScheduleValueError):
+            every().hour.between("09:00", "17:00", 43)
+
+    def test_rejected_input_leaves_job_unchanged(self):
+        job = every().hour.between("09:00", "17:00", "America/New_York")
+        before = str(job)
+        for args in (
+            ("10:00", "25:00", "Europe/Berlin"),
+            ("10:00", "10:00"),
+            ("10:00", "18:00", 43),
+        ):
+            with self.subTest(args=args):
+                with self.assertRaises(ScheduleValueError):
+                    job.between(*args)
+                assert str(job) == before
+        with mock_datetime(2024, 1, 15, 12, 0):
+            job.do(make_mock_job())
+        # Still 09:00 in New York.
+        assert job.next_run == datetime.datetime(2024, 1, 15, 15, 0)
+
+    def test_str_and_repr(self):
+        def job_fun():
+            pass
+
+        with mock_datetime(2024, 1, 19, 12, 0):
+            job = every(5).minutes.between("09:00", "17:00:30").do(job_fun)
+            both = every().hour.weekday.between("22:00", "06:00").do(job_fun)
+            assert str(job) == (
+                "Job(interval=5, unit=minutes, between=09:00-17:00:30, do=job_fun, "
+                "args=(), kwargs={})"
+            )
+            assert repr(job) == (
+                "Every 5 minutes between 09:00 and 17:00:30 do job_fun() "
+                "(last run: [never], next run: 2024-01-19 12:05:00)"
+            )
+            assert str(both) == (
+                "Job(interval=1, unit=hours, on=weekdays, between=22:00-06:00, "
+                "do=job_fun, args=(), kwargs={})"
+            )
+            assert repr(both) == (
+                "Every 1 hour on weekdays between 22:00 and 06:00 do job_fun() "
+                "(last run: [never], next run: 2024-01-19 22:00:00)"
+            )

@@ -13,6 +13,11 @@ Issue numbers refer to the original
   ``every().weekday.at("09:00")`` runs once a day from Monday to Friday;
   ``every(5).minutes.weekday`` keeps its interval but skips Saturdays and
   Sundays, and starts again at midnight on Monday.
+- Add ``.between(start, end, tz=None)`` for jobs that run every few seconds,
+  minutes or hours (#182, #231, #260, #347, #481, #568, #597).
+  ``every(5).minutes.between("09:00", "17:00")`` runs only from 09:00 to
+  17:00, both included. The window can cross midnight, have its own timezone,
+  and be combined with ``.weekday`` and ``.weekend``.
 
 1.4.0 (2026-10-10)
 ++++++++++++++++++
