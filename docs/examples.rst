@@ -98,6 +98,24 @@ configuration file:
     day = "friday"
     getattr(schedule.every(), day).at("09:00").do(job)
 
+Run a job on weekdays or at weekends only
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``.weekday`` runs a job from Monday to Friday, ``.weekend`` on Saturdays and
+Sundays. Used after seconds, minutes or hours, the job keeps its interval but
+skips the other days, starting again at midnight.
+
+.. code-block:: python
+
+    import schedule_ng as schedule
+
+    def job():
+        print("I'm working...")
+
+    schedule.every().weekday.at("09:00").do(job)
+    schedule.every().weekend.at("10:30", "Europe/Amsterdam").do(job)
+    schedule.every(15).minutes.weekday.do(job)
+
 Use a decorator to schedule a job
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

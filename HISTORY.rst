@@ -3,6 +3,17 @@
 History
 -------
 
+1.5.0 (unreleased)
+++++++++++++++++++
+
+Issue numbers refer to the original
+`dbader/schedule <https://github.com/dbader/schedule>`_ repository.
+
+- Add ``.weekday`` and ``.weekend`` (#99, #129, #232, #297, #511, #556, #607).
+  ``every().weekday.at("09:00")`` runs once a day from Monday to Friday;
+  ``every(5).minutes.weekday`` keeps its interval but skips Saturdays and
+  Sundays, and starts again at midnight on Monday.
+
 1.4.0 (2026-10-10)
 ++++++++++++++++++
 
