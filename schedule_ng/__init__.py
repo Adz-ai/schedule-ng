@@ -248,6 +248,10 @@ class Job:
     method, which also defines its `interval`.
     """
 
+    # Days of the week (0 is Monday) the job may run on, set by .weekday or
+    # .weekend. A class attribute, so that jobs pickled by 1.4 still load.
+    _days: frozenset[int] | None = None
+
     def __init__(self, interval: float, scheduler: Scheduler | None = None) -> None:
         if interval <= 0:
             raise ScheduleValueError("Interval must be greater than zero")
@@ -290,6 +294,9 @@ class Job:
         )
         return self._next_run < other._next_run
 
+    def _days_name(self) -> str:
+        return "weekdays" if self._days == _WEEKDAYS else "weekends"
+
     def _job_func_name(self) -> str:
         name = getattr(self.job_func, "__name__", None)
         return name if name is not None else repr(self.job_func)
@@ -311,9 +318,10 @@ class Job:
     def __str__(self) -> str:
         job_func_name = self._job_func_name()
 
-        return ("Job(interval={}, unit={}, {}do={}, args={}, kwargs={})").format(
+        return ("Job(interval={}, unit={}, {}{}do={}, args={}, kwargs={})").format(
             self.interval,
             self.unit,
+            "" if self._days is None else "on={}, ".format(self._days_name()),
             "" if self.at_time is None else "at={}, ".format(self.at_time),
             job_func_name,
             "()" if self.job_func is None else self.job_func.args,
@@ -341,10 +349,13 @@ class Job:
         else:
             call_repr = "[None]"
 
+        days = "" if self._days is None else " on " + self._days_name()
+
         if self.at_time is not None:
-            return "Every %s %s at %s do %s %s" % (
+            return "Every %s %s%s at %s do %s %s" % (
                 self.interval,
                 self.unit[:-1] if self.interval == 1 and self.unit else self.unit,
+                days,
                 self.at_time,
                 call_repr,
                 timestats,
@@ -353,7 +364,7 @@ class Job:
             fmt = (
                 "Every %(interval)s "
                 + ("to %(latest)s " if self.latest is not None else "")
-                + "%(unit)s do %(call_repr)s %(timestats)s"
+                + "%(unit)s%(days)s do %(call_repr)s %(timestats)s"
             )
 
             return fmt % dict(
@@ -362,6 +373,7 @@ class Job:
                 unit=(
                     self.unit[:-1] if self.interval == 1 and self.unit else self.unit
                 ),
+                days=days,
                 call_repr=call_repr,
                 timestats=timestats,
             )
@@ -497,6 +509,46 @@ class Job:
             )
         self.start_day = "sunday"
         return self.weeks
+
+    @property
+    def weekday(self) -> Self:
+        """
+        Run the job on weekdays (Monday to Friday) only.
+
+        ``every().weekday`` runs the job once a day on weekdays. Use
+        :meth:`at` to pick the time; the days follow its timezone.
+
+        After seconds, minutes or hours, as in ``every(5).minutes.weekday``,
+        the job keeps its interval, but a run that would fall on a Saturday
+        or Sunday moves to midnight on Monday, or to the first time given to
+        :meth:`at` after it. Days follow the timezone given to :meth:`at`,
+        or local time.
+        """
+        return self._on_days(_WEEKDAYS, "weekday")
+
+    @property
+    def weekend(self) -> Self:
+        """
+        Run the job on Saturdays and Sundays only. Works like :attr:`weekday`.
+        """
+        return self._on_days(_WEEKEND, "weekend")
+
+    def _on_days(self, days: frozenset[int], name: str) -> Self:
+        if self.unit is None:
+            if self.interval != 1:
+                raise IntervalError(
+                    "Scheduling .{0}() jobs is only allowed for daily jobs. "
+                    "Using .{0}() on a job scheduled to run every 2 or more days "
+                    "is not supported.".format(name)
+                )
+            self.unit = "days"
+        elif self.unit not in ("seconds", "minutes", "hours"):
+            raise ScheduleValueError(
+                "Use every().{0} for a daily job; .{0} can only follow "
+                "seconds, minutes or hours".format(name)
+            )
+        self._days = days
+        return self
 
     def tag(self, *tags: Hashable) -> Self:
         """
@@ -771,6 +823,14 @@ class Job:
         if self.start_day is not None and self.unit != "weeks":
             raise ScheduleValueError("`unit` should be 'weeks'")
 
+        if self._days is not None and (
+            self.unit == "weeks" or self.unit == "days" and self.latest is not None
+        ):
+            raise ScheduleValueError(
+                "Daily .weekday and .weekend jobs can't use .to(), "
+                "a weekly unit or a day name"
+            )
+
         if self.unit in ("days", "weeks"):
             # Days and weeks follow the wall clock of the job's timezone, so a
             # daily job at 10:30 stays at 10:30 when clocks change. Candidates
@@ -788,27 +848,55 @@ class Job:
             if interval != 1:
                 wall += period
             next_run = _localize(wall, self.at_time_zone)
-            while next_run <= now:
+            while next_run <= now or (
+                self._days is not None and wall.weekday() not in self._days
+            ):
                 wall += period
                 next_run = _localize(wall, self.at_time_zone)
         else:
             # Shorter units measure elapsed time, which is unaffected by
             # clock changes.
-            next_run = now
-            if self.at_time is not None:
-                # The offset is taken from the current time, which keeps
-                # minutes correct in timezones with a non-whole-hour offset.
-                current = now.astimezone(self.at_time_zone)
-                current = current.replace(second=self.at_time.second, microsecond=0)
-                if self.unit == "hours":
-                    current = current.replace(minute=self.at_time.minute)
-                next_run = current.astimezone(_UTC)
+            next_run = now if self.at_time is None else self._at_time_near(now)
             if interval != 1:
                 next_run += period
             while next_run <= now:
                 next_run += period
+            if self._days is not None:
+                next_run = self._skip_excluded_days(next_run)
 
         self._next_run = next_run
+
+    def _at_time_near(self, moment: datetime.datetime) -> datetime.datetime:
+        """
+        The time given to at() in the same hour (or minute) as `moment`.
+        """
+        assert self.at_time is not None
+        # The offset is taken from `moment`, which keeps minutes correct in
+        # timezones with a non-whole-hour offset.
+        current = moment.astimezone(self.at_time_zone)
+        current = current.replace(second=self.at_time.second, microsecond=0)
+        if self.unit == "hours":
+            current = current.replace(minute=self.at_time.minute)
+        return current.astimezone(_UTC)
+
+    def _skip_excluded_days(self, moment: datetime.datetime) -> datetime.datetime:
+        """
+        Move a run that falls on a day excluded by .weekday or .weekend to
+        the start of the next allowed day, in the timezone of at().
+        """
+        assert self._days is not None
+        day = _wall_clock(moment, self.at_time_zone).date()
+        if day.weekday() in self._days:
+            return moment
+        while day.weekday() not in self._days:
+            day += datetime.timedelta(days=1)
+        start = _localize(
+            datetime.datetime.combine(day, datetime.time()), self.at_time_zone
+        )
+        if self.at_time is None:
+            return start
+        # Both are in the timezone of at(), so this is never before `start`.
+        return self._at_time_near(start)
 
     def _is_overdue(self, when: datetime.datetime) -> bool:
         if self.cancel_after is None:
@@ -929,6 +1017,9 @@ def _random_interval(earliest: float, latest: float) -> float:
 
 
 _UTC = datetime.timezone.utc
+
+_WEEKDAYS = frozenset(range(5))
+_WEEKEND = frozenset((5, 6))
 
 
 def _parse_timezone(tz: str | datetime.tzinfo) -> datetime.tzinfo:

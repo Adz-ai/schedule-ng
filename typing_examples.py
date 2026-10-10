@@ -31,6 +31,8 @@ assert_type(
     schedule.every().day.at("10:30", "Europe/Amsterdam").tag("daily"), schedule.Job
 )
 assert_type(schedule.every().hour.until(datetime.timedelta(hours=8)), schedule.Job)
+assert_type(schedule.every().weekday.at("09:00").do(job), schedule.Job)
+assert_type(schedule.every(5).minutes.weekend, schedule.Job)
 
 # Scheduler-level helpers.
 assert_type(schedule.next_run(), datetime.datetime | None)

@@ -2015,3 +2015,226 @@ class ZoneInfoTests(TestCase):
     def test_invalid_timezone_type(self):
         with self.assertRaisesRegex(ScheduleValueError, "string or a tzinfo"):
             every().day.at("10:30", 43)
+
+
+class WeekdayWeekendTests(TestCase):
+    # 2024-01-15 is a Monday. Local time is Berlin (CET, UTC+1, in January).
+
+    def setUp(self):
+        schedule.clear()
+
+    def test_weekday_at_time_through_the_week(self):
+        expected = {
+            # day: (next run when scheduled at 08:00, at 10:00)
+            15: (15, 16),
+            16: (16, 17),
+            17: (17, 18),
+            18: (18, 19),
+            19: (19, 22),
+            20: (22, 22),
+            21: (22, 22),
+        }
+        for day, (before, after) in expected.items():
+            for hour, next_day in ((8, before), (10, after)):
+                with self.subTest(day=day, hour=hour):
+                    with mock_datetime(2024, 1, day, hour, 0):
+                        job = every().weekday.at("09:00").do(make_mock_job())
+                    assert job.next_run == datetime.datetime(2024, 1, next_day, 9, 0)
+
+    def test_weekend_at_time_through_the_week(self):
+        expected = {
+            15: (20, 20),
+            16: (20, 20),
+            17: (20, 20),
+            18: (20, 20),
+            19: (20, 20),
+            20: (20, 21),
+            21: (21, 27),
+        }
+        for day, (before, after) in expected.items():
+            for hour, next_day in ((8, before), (10, after)):
+                with self.subTest(day=day, hour=hour):
+                    with mock_datetime(2024, 1, day, hour, 0):
+                        job = every().weekend.at("09:00").do(make_mock_job())
+                    assert job.next_run == datetime.datetime(2024, 1, next_day, 9, 0)
+
+    def test_without_at_keeps_the_time_of_day(self):
+        for prop, day, next_day in (
+            ("weekday", 17, 18),
+            ("weekday", 19, 22),
+            ("weekday", 20, 22),
+            ("weekend", 19, 20),
+            ("weekend", 20, 21),
+            ("weekend", 21, 27),
+        ):
+            with self.subTest(prop=prop, day=day):
+                with mock_datetime(2024, 1, day, 10, 17, 30):
+                    job = getattr(every(), prop).do(make_mock_job())
+                assert job.next_run == datetime.datetime(2024, 1, next_day, 10, 17, 30)
+
+    def test_at_accepts_daily_formats(self):
+        with mock_datetime(2024, 1, 19, 10, 0):
+            job = every().weekday.at("09:00:30").do(make_mock_job())
+        assert job.next_run == datetime.datetime(2024, 1, 22, 9, 0, 30)
+        for bad in (":30", "30:00", "24:00", "9:00"):
+            with self.subTest(time=bad):
+                with self.assertRaises(ScheduleValueError):
+                    every().weekday.at(bad)
+
+    def test_friday_job_runs_next_on_monday_across_dst_change(self):
+        # Berlin changes clocks on the last Sunday of March and October.
+        # 09:00 CET is 08:00 UTC; 09:00 CEST is 07:00 UTC.
+        for thursday, friday_run, monday_run in (
+            ((10, 24), utc(2024, 10, 25, 7), utc(2024, 10, 28, 8)),
+            ((3, 28), utc(2024, 3, 29, 8), utc(2024, 4, 1, 7)),
+        ):
+            with self.subTest(thursday=thursday):
+                scheduler = schedule.Scheduler()
+                with mock_datetime(2024, *thursday, 12, 0, zone=TZ_BERLIN):
+                    scheduler.every().weekday.at("09:00").do(make_mock_job())
+                runs = poll_across(
+                    scheduler,
+                    TZ_BERLIN,
+                    friday_run - datetime.timedelta(hours=12),
+                    monday_run + datetime.timedelta(hours=12),
+                    step=datetime.timedelta(minutes=30),
+                )
+                self.assertEqual(runs, [friday_run, monday_run])
+
+    def test_at_time_zone_decides_the_day(self):
+        # Friday 12:00 in Berlin is Friday 20:00 in Tokyo. Monday 07:00 in
+        # Tokyo is still Sunday 23:00 in Berlin.
+        tokyo = ZoneInfo("Asia/Tokyo")
+        with mock_datetime(2024, 1, 19, 12, 0):
+            weekday_job = every().weekday.at("07:00", tokyo).do(make_mock_job())
+            weekend_job = every().weekend.at("07:00", tokyo).do(make_mock_job())
+        assert weekday_job.next_run == datetime.datetime(2024, 1, 21, 23, 0)
+        assert weekend_job.next_run == datetime.datetime(2024, 1, 19, 23, 0)
+
+    def test_filter_moves_to_midnight_of_next_allowed_day(self):
+        for prop, start, expected in (
+            # Friday 23:58: 00:03 on Saturday is skipped.
+            ("weekday", (19, 23, 58), datetime.datetime(2024, 1, 22, 0, 0)),
+            ("weekday", (19, 12, 0), datetime.datetime(2024, 1, 19, 12, 5)),
+            ("weekend", (21, 23, 58), datetime.datetime(2024, 1, 27, 0, 0)),
+            ("weekend", (19, 23, 58), datetime.datetime(2024, 1, 20, 0, 3)),
+        ):
+            with self.subTest(prop=prop, start=start):
+                with mock_datetime(2024, 1, *start):
+                    job = getattr(every(5).minutes, prop).do(make_mock_job())
+                assert job.next_run == expected
+
+    def test_filter_keeps_at_time_of_hourly_jobs(self):
+        with mock_datetime(2024, 1, 19, 23, 50):
+            job = every().hour.at(":30").weekday.do(make_mock_job())
+            # The days follow the timezone given to at(): Monday starts in
+            # India at 19:30 on Sunday in Berlin, so :15 there comes at 19:45.
+            kolkata = ZoneInfo("Asia/Kolkata")
+            india = every().hour.at(":15", kolkata).weekday.do(make_mock_job())
+        assert job.next_run == datetime.datetime(2024, 1, 22, 0, 30)
+        assert india.next_run == datetime.datetime(2024, 1, 21, 19, 45)
+
+    def test_filter_runs_resume_on_monday(self):
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 1, 19, 21, 0, zone=TZ_BERLIN):
+            scheduler.every(2).hours.weekday.do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 1, 19, 20), utc(2024, 1, 22, 3)
+        )
+        # 23:00 on Friday, then 00:00 and 02:00 on Monday (Berlin time).
+        self.assertEqual(
+            runs, [utc(2024, 1, 19, 22), utc(2024, 1, 21, 23), utc(2024, 1, 22, 1)]
+        )
+
+    def test_day_mode_allows_only_interval_one(self):
+        for prop in ("weekday", "weekend"):
+            with self.subTest(prop=prop):
+                with self.assertRaisesRegex(
+                    IntervalError,
+                    (
+                        r"Scheduling \.{0}\(\) jobs is only allowed for daily jobs\. "
+                        r"Using \.{0}\(\) on a job scheduled to run every 2 or more "
+                        r"days is not supported\."
+                    ).format(prop),
+                ):
+                    getattr(every(2), prop)
+
+    def test_rejected_after_days_and_weeks(self):
+        for build in (
+            lambda: every().day.weekday,
+            lambda: every(2).days.weekend,
+            lambda: every().week.weekday,
+            lambda: every().monday.weekend,
+        ):
+            with self.assertRaises(ScheduleValueError):
+                build()
+
+    def test_rejected_with_weekly_unit_or_random_interval(self):
+        for build in (
+            lambda: every().weekday.monday,
+            lambda: every().weekend.weeks,
+            lambda: every().weekday.to(3),
+            lambda: every().to(3).weekend,
+        ):
+            with self.assertRaises(ScheduleValueError):
+                build().do(make_mock_job())
+        # A random interval is fine for seconds, minutes and hours.
+        with mock_datetime(2024, 1, 19, 12, 0):
+            job = every(5).to(10).minutes.weekday.do(make_mock_job())
+        assert datetime.datetime(2024, 1, 19, 12, 5) <= job.next_run
+        assert job.next_run <= datetime.datetime(2024, 1, 19, 12, 10)
+
+    def test_str_and_repr(self):
+        def job_fun():
+            pass
+
+        with mock_datetime(2024, 1, 19, 12, 0):
+            daily = every().weekday.at("09:00").do(job_fun)
+            interval = every(5).minutes.weekend.do(job_fun)
+            assert str(daily) == (
+                "Job(interval=1, unit=days, on=weekdays, at=09:00:00, do=job_fun, "
+                "args=(), kwargs={})"
+            )
+            assert repr(daily) == (
+                "Every 1 day on weekdays at 09:00:00 do job_fun() "
+                "(last run: [never], next run: 2024-01-22 09:00:00)"
+            )
+            assert str(interval) == (
+                "Job(interval=5, unit=minutes, on=weekends, do=job_fun, "
+                "args=(), kwargs={})"
+            )
+            assert repr(interval) == (
+                "Every 5 minutes on weekends do job_fun() "
+                "(last run: [never], next run: 2024-01-20 00:00:00)"
+            )
+
+    def test_job_pickled_by_1_4_still_works(self):
+        # Jobs pickled by schedule-ng 1.4 lack the attributes added since.
+        job = schedule.Scheduler().every().day.at("09:00").do(len, "")
+        old = schedule.Job.__new__(schedule.Job)
+        old.__dict__.update(
+            (key, value) for key, value in vars(job).items() if key in JOB_STATE_1_4
+        )
+        restored = pickle.loads(pickle.dumps(old))
+        with mock_datetime(2024, 1, 20, 9, 0):
+            restored.run()
+            assert restored.next_run == datetime.datetime(2024, 1, 21, 9, 0)
+            assert "on=" not in str(restored)
+            assert repr(restored).startswith("Every 1 day at 09:00:00 do len('')")
+
+
+# The attributes of a Job in schedule-ng 1.4.
+JOB_STATE_1_4 = {
+    "interval",
+    "latest",
+    "job_func",
+    "unit",
+    "at_time",
+    "at_time_zone",
+    "last_run",
+    "_next_run",
+    "start_day",
+    "cancel_after",
+    "tags",
+    "scheduler",
+}
