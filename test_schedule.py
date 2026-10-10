@@ -2,9 +2,10 @@
 
 import datetime
 import functools
+import io
+import struct
 from unittest import mock, TestCase
-import os
-import time
+from zoneinfo import ZoneInfo
 
 # Silence "missing docstring", "method could be a function",
 # "class already defined", and "too many public methods" messages:
@@ -25,9 +26,24 @@ TZ_AUCKLAND = "NZST-12NZDT,M9.5.0,M4.1.0/3"
 TZ_CHATHAM = "<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45"
 TZ_UTC = "UTC0"
 
-# Set timezone to Europe/Berlin (CEST) to ensure global reproducibility
-os.environ["TZ"] = TZ_BERLIN
-time.tzset()
+
+def posix_zone(tz_str):
+    """
+    Build a ZoneInfo from a POSIX TZ string.
+
+    The string is wrapped in a minimal TZif file without transitions, so all
+    offsets come from its footer rule. This lets the tests simulate any local
+    timezone without time.tzset(), which is not available on Windows.
+    """
+    header = b"TZif2" + bytes(15) + struct.pack(">6l", 0, 0, 0, 0, 1, 4)
+    data = struct.pack(">lBB", 0, 0, 0) + b"UTC" + bytes(1)
+    footer = ("\n" + tz_str + "\n").encode()
+    return ZoneInfo.from_file(io.BytesIO(header + data + header + data + footer))
+
+
+# The simulated local timezone. Set to Europe/Berlin (CEST) to ensure global
+# reproducibility; mock_datetime(zone=...) overrides it temporarily.
+local_zone = posix_zone(TZ_BERLIN)
 
 
 def make_mock_job(name=None):
@@ -54,7 +70,17 @@ class mock_datetime:
         self.original_zone = None
 
     def __enter__(self):
+        global local_zone
+        original_datetime = datetime.datetime
+
         class MockDate(datetime.datetime):
+            def astimezone(self, tz=None):
+                # Use the simulated local timezone instead of the OS timezone,
+                # both to interpret naive datetimes and as the default target.
+                if self.tzinfo is None:
+                    self = self.replace(tzinfo=local_zone)
+                return original_datetime.astimezone(self, tz or local_zone)
+
             @classmethod
             def today(cls):
                 return cls(self.year, self.month, self.day)
@@ -74,23 +100,21 @@ class mock_datetime:
                     return mock_date.astimezone(tz)
                 return mock_date
 
-        self.original_datetime = datetime.datetime
+        self.original_datetime = original_datetime
         datetime.datetime = MockDate
 
-        self.original_zone = os.environ.get("TZ")
+        self.original_zone = local_zone
         if self.zone:
-            os.environ["TZ"] = self.zone
-            time.tzset()
+            local_zone = posix_zone(self.zone)
 
         return MockDate(
             self.year, self.month, self.day, self.hour, self.minute, self.second
         )
 
     def __exit__(self, *args, **kwargs):
+        global local_zone
         datetime.datetime = self.original_datetime
-        if self.original_zone:
-            os.environ["TZ"] = self.original_zone
-            time.tzset()
+        local_zone = self.original_zone
 
 
 class SchedulerTests(TestCase):
