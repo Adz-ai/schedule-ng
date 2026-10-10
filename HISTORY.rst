@@ -3,8 +3,11 @@
 History
 -------
 
-1.4.0 (unreleased)
+1.4.0 (2026-10-10)
 ++++++++++++++++++
+
+Issue numbers refer to the original
+`dbader/schedule <https://github.com/dbader/schedule>`_ repository.
 
 - **Require Python 3.11 or newer.** Python 3.9 and 3.10 have reached their end
   of life; pip keeps installing schedule-ng 1.3.1 on them.
@@ -19,6 +22,12 @@ History
 - ``run_all(delay_seconds)`` only waits between jobs, not after the last one.
 - Calling ``run_pending()`` on the same scheduler from several threads no
   longer runs a due job more than once (#630).
+- Document sub-second intervals, running a job immediately, and choosing the
+  weekday by name.
+- Add a security policy (``SECURITY.md``) with private vulnerability
+  reporting. Releases are built by a hardened pipeline: pinned GitHub Actions
+  and runner images, no build caches, and continuous scanning with CodeQL,
+  zizmor and OpenSSF Scorecard.
 
 1.3.1 (2026-10-10)
 ++++++++++++++++++
