@@ -15,6 +15,25 @@ First release of schedule-ng, a maintained fork of schedule 1.2.2.
 - Make the test suite run on Windows.
 - Replace setup.py, setup.cfg and tox with a single pyproject.toml.
 
+Fixes for daylight saving time (DST) changes:
+
+- Interval jobs (seconds, minutes, hours) no longer pause for an hour when
+  clocks go back (#636, #649). These intervals now measure elapsed time, so
+  ``every(4).hours`` is always 4 real hours. **Behaviour change:** schedule
+  1.2.2 used wall-clock time, so a job created at midnight on a DST day now
+  runs at 05:00 or 03:00 instead of 04:00.
+- Jobs with a timezone (``.at("01:30", "UTC")``) no longer run an hour early
+  and then on every poll when the local clock goes back.
+- Jobs with a timezone no longer run twice the day after their ``.at()`` time
+  fell into a DST gap.
+- Daily and weekly jobs without a timezone now handle DST gaps like jobs with
+  a timezone: a job at 02:30 runs at 03:30 when clocks jump from 02:00 to
+  03:00. Previously it ran at 03:00.
+- ``idle_seconds`` is correct across DST changes.
+
+``Job.next_run`` is still a naive datetime in local time; jobs now track the
+next run in UTC internally.
+
 1.2.2 (2024-05-25)
 ++++++++++++++++++
 

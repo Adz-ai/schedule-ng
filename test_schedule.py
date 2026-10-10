@@ -1285,101 +1285,80 @@ class SchedulerTests(TestCase):
         with self.assertRaises(ScheduleValueError):
             every().day.at("10:30", 43).do(mock_job)
 
-    def test_align_utc_offset_no_timezone(self):
-        job = schedule.every().day.at("10:00").do(make_mock_job())
-        now = datetime.datetime(2024, 5, 11, 10, 30, 55, 0)
-        aligned_time = job._correct_utc_offset(now, fixate_time=True)
-        self.assertEqual(now, aligned_time)
+    # _localize() turns a wall-clock time into a UTC moment. These replace the
+    # tests of _correct_utc_offset() from schedule 1.2.2, with the same cases.
 
-    def setup_utc_offset_test(self):
+    def test_localize_local_time(self):
+        # Local time is Berlin, simulated by mock_datetime.
+        with mock_datetime(2024, 1, 1, 0, 0):
+            wall = datetime.datetime(2024, 5, 11, 10, 30, 55)
+            self.assertEqual(
+                schedule._localize(wall, None), utc(2024, 5, 11, 8, 30, 55)
+            )
+            # Gap: 02:30 does not exist on 2024-03-31 and becomes 03:30 CEST.
+            wall = datetime.datetime(2024, 3, 31, 2, 30)
+            self.assertEqual(schedule._localize(wall, None), utc(2024, 3, 31, 1, 30))
+            # Overlap: 02:30 happens twice on 2024-10-27; the first one is used.
+            for fold in (0, 1):
+                wall = datetime.datetime(2024, 10, 27, 2, 30, fold=fold)
+                self.assertEqual(
+                    schedule._localize(wall, None), utc(2024, 10, 27, 0, 30)
+                )
+
+    def localize_timezones(self):
+        zones = [ZoneInfo("Europe/Berlin")]
         try:
             import pytz
+
+            zones.append(pytz.timezone("Europe/Berlin"))
         except ModuleNotFoundError:
-            self.skipTest("pytz unavailable")
-        job = (
-            schedule.every()
-            .day.at("10:00", "Europe/Berlin")
-            .do(make_mock_job("tz-test"))
-        )
-        tz = pytz.timezone("Europe/Berlin")
-        return (job, tz)
+            pass
+        return zones
 
-    def test_align_utc_offset_no_change(self):
-        (job, tz) = self.setup_utc_offset_test()
-        now = tz.localize(datetime.datetime(2023, 3, 26, 1, 30))
-        aligned_time = job._correct_utc_offset(now, fixate_time=False)
-        self.assertEqual(now, aligned_time)
+    def test_localize_no_change(self):
+        for tz in self.localize_timezones():
+            with self.subTest(tz=type(tz).__name__):
+                wall = datetime.datetime(2023, 3, 26, 1, 30)
+                self.assertEqual(schedule._localize(wall, tz), utc(2023, 3, 26, 0, 30))
 
-    def test_align_utc_offset_with_dst_gap(self):
-        (job, tz) = self.setup_utc_offset_test()
-        # Non-existent time in Berlin timezone
-        gap_time = tz.localize(datetime.datetime(2024, 3, 31, 2, 30, 0))
-        aligned_time = job._correct_utc_offset(gap_time, fixate_time=True)
+    def test_localize_dst_gap(self):
+        for tz in self.localize_timezones():
+            with self.subTest(tz=type(tz).__name__):
+                # 02:30 does not exist; it becomes 03:30 CEST (01:30 UTC).
+                wall = datetime.datetime(2024, 3, 31, 2, 30)
+                moment = schedule._localize(wall, tz)
+                self.assertEqual(moment, utc(2024, 3, 31, 1, 30))
+                local = moment.astimezone(tz)
+                self.assertEqual((local.hour, local.minute), (3, 30))
+                self.assertEqual(local.utcoffset(), datetime.timedelta(hours=2))
 
-        assert aligned_time.utcoffset() == datetime.timedelta(hours=2)
-        assert aligned_time.day == 31
-        assert aligned_time.hour == 3
-        assert aligned_time.minute == 30
+    def test_localize_dst_fold(self):
+        for tz in self.localize_timezones():
+            with self.subTest(tz=type(tz).__name__):
+                # 02:30 exists twice; the first occurrence (CEST) is used.
+                wall = datetime.datetime(2024, 10, 27, 2, 30)
+                self.assertEqual(schedule._localize(wall, tz), utc(2024, 10, 27, 0, 30))
 
-    def test_align_utc_offset_with_dst_fold(self):
-        (job, tz) = self.setup_utc_offset_test()
-        # This time exists twice, this is the first occurance
-        overlap_time = tz.localize(datetime.datetime(2024, 10, 27, 2, 30))
-        aligned_time = job._correct_utc_offset(overlap_time, fixate_time=False)
-        # Since the time exists twice, no fixate_time flag should yield the first occurrence
-        first_occurrence = tz.localize(datetime.datetime(2024, 10, 27, 2, 30, fold=0))
-        self.assertEqual(first_occurrence, aligned_time)
-
-    def test_align_utc_offset_with_dst_fold_fixate_1(self):
-        (job, tz) = self.setup_utc_offset_test()
-        # This time exists twice, this is the 1st occurance
-        overlap_time = tz.localize(datetime.datetime(2024, 10, 27, 1, 30), is_dst=True)
-        overlap_time += datetime.timedelta(
-            hours=1
-        )  # puts it at 02:30+02:00 (Which exists once)
-
-        aligned_time = job._correct_utc_offset(overlap_time, fixate_time=True)
-        # The time should not have moved, because the original time is valid
-        assert aligned_time.utcoffset() == datetime.timedelta(hours=2)
-        assert aligned_time.hour == 2
-        assert aligned_time.minute == 30
-        assert aligned_time.day == 27
-
-    def test_align_utc_offset_with_dst_fold_fixate_2(self):
-        (job, tz) = self.setup_utc_offset_test()
-        # 02:30 exists twice, this is the 2nd occurance
-        overlap_time = tz.localize(datetime.datetime(2024, 10, 27, 2, 30), is_dst=False)
-        # The time 2024-10-27 02:30:00+01:00 exists once
-
-        aligned_time = job._correct_utc_offset(overlap_time, fixate_time=True)
-        # The time was valid, should not have been moved
-        assert aligned_time.utcoffset() == datetime.timedelta(hours=1)
-        assert aligned_time.hour == 2
-        assert aligned_time.minute == 30
-        assert aligned_time.day == 27
-
-    def test_align_utc_offset_after_fold_fixate(self):
-        (job, tz) = self.setup_utc_offset_test()
-        # This time is 30 minutes after a folded hour.
-        duplicate_time = tz.localize(datetime.datetime(2024, 10, 27, 2, 30))
-        duplicate_time += datetime.timedelta(hours=1)
-
-        aligned_time = job._correct_utc_offset(duplicate_time, fixate_time=False)
-
-        assert aligned_time.utcoffset() == datetime.timedelta(hours=1)
-        assert aligned_time.hour == 3
-        assert aligned_time.minute == 30
-        assert aligned_time.day == 27
+    def test_localize_after_fold(self):
+        for tz in self.localize_timezones():
+            with self.subTest(tz=type(tz).__name__):
+                # 03:30 on the same day exists once, in CET.
+                wall = datetime.datetime(2024, 10, 27, 3, 30)
+                self.assertEqual(schedule._localize(wall, tz), utc(2024, 10, 27, 2, 30))
 
     def test_daylight_saving_time(self):
+        # Intervals in seconds, minutes and hours measure elapsed time, so
+        # "every 4 hours" is 4 real hours even when the clock changes.
+        # (schedule 1.2.2 used wall-clock time, which made interval jobs pause
+        # for an hour when clocks go back: upstream #636, #649.)
         mock_job = make_mock_job()
         # 27 March 2022, 02:00:00 clocks were turned forward 1 hour
         with mock_datetime(2022, 3, 27, 0, 0):
-            assert every(4).hours.do(mock_job).next_run.hour == 4
+            assert every(4).hours.do(mock_job).next_run.hour == 5
 
         # Sunday, 30 October 2022, 03:00:00 clocks were turned backward 1 hour
         with mock_datetime(2022, 10, 30, 0, 0):
-            assert every(4).hours.do(mock_job).next_run.hour == 4
+            assert every(4).hours.do(mock_job).next_run.hour == 3
 
     def test_move_to_next_weekday_today(self):
         monday = datetime.datetime(2024, 5, 13, 10, 27, 54)
@@ -1788,3 +1767,123 @@ class ConfigurationFailureTests(TestCase):
         with self.assertRaises(ScheduleValueError):
             job.until(datetime.timedelta(days=-1))
         self.assertIsNone(job.cancel_after)
+
+
+def poll_across(
+    scheduler, zone, start_utc, end_utc, step=datetime.timedelta(minutes=1)
+):
+    """
+    Call run_pending() at every `step` of real time between two UTC instants,
+    with the local clock in `zone` (a POSIX TZ string), and return the UTC
+    instants at which jobs ran.
+    """
+    tzinfo = posix_zone(zone)
+    runs = []
+    now_utc = start_utc
+    while now_utc < end_utc:
+        local = now_utc.astimezone(tzinfo)
+        with mock_datetime(
+            local.year,
+            local.month,
+            local.day,
+            local.hour,
+            local.minute,
+            local.second,
+            zone=zone,
+            fold=local.fold,
+        ):
+            ran = len(runs)
+            for job in scheduler.jobs:
+                job.job_func.func.side_effect = lambda t=now_utc: runs.append(t)
+            scheduler.run_pending()
+            assert len(runs) - ran <= len(scheduler.jobs)
+        now_utc += step
+    return runs
+
+
+def utc(*args):
+    return datetime.datetime(*args, tzinfo=datetime.timezone.utc)
+
+
+class DaylightSavingTimeTests(TestCase):
+    # Berlin: clocks go back from 03:00 CEST to 02:00 CET on 2024-10-27
+    # (01:00 UTC), and forward from 02:00 CET to 03:00 CEST on 2024-03-31
+    # (01:00 UTC).
+
+    def assert_runs_every(self, runs, interval):
+        gaps = {b - a for a, b in zip(runs, runs[1:])}
+        self.assertEqual(gaps, {interval}, runs)
+
+    def test_interval_jobs_keep_running_when_clocks_go_back(self):
+        for interval, build in [
+            (datetime.timedelta(minutes=15), lambda s: s.every(15).minutes),
+            (datetime.timedelta(hours=1), lambda s: s.every().hour),
+        ]:
+            with self.subTest(interval=interval):
+                scheduler = schedule.Scheduler()
+                with mock_datetime(2024, 10, 27, 1, 0, zone=TZ_BERLIN):
+                    build(scheduler).do(make_mock_job())
+                runs = poll_across(
+                    scheduler, TZ_BERLIN, utc(2024, 10, 26, 23), utc(2024, 10, 27, 4)
+                )
+                self.assert_runs_every(runs, interval)
+                # Five hours of polling, excluding the start.
+                self.assertEqual(len(runs), 5 * 3600 // interval.seconds - 1)
+
+    def test_interval_jobs_keep_running_when_clocks_go_forward(self):
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 3, 31, 1, 0, zone=TZ_BERLIN):
+            scheduler.every(15).minutes.do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 3, 31, 0), utc(2024, 3, 31, 4)
+        )
+        self.assert_runs_every(runs, datetime.timedelta(minutes=15))
+        self.assertEqual(len(runs), 15)
+
+    def test_daily_job_runs_once_when_clocks_go_back(self):
+        # 02:30 happens twice on 2024-10-27; the job runs at the first one.
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 10, 26, 12, 0, zone=TZ_BERLIN):
+            scheduler.every().day.at("02:30").do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 10, 26, 12), utc(2024, 10, 28, 12)
+        )
+        self.assertEqual(runs, [utc(2024, 10, 27, 0, 30), utc(2024, 10, 28, 1, 30)])
+
+    def test_daily_job_runs_once_when_clocks_go_forward(self):
+        # 02:30 does not exist on 2024-03-31; like jobs with a timezone, the
+        # job runs at 03:30 instead.
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 3, 30, 12, 0, zone=TZ_BERLIN):
+            scheduler.every().day.at("02:30").do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 3, 30, 12), utc(2024, 4, 1, 12)
+        )
+        self.assertEqual(runs, [utc(2024, 3, 31, 1, 30), utc(2024, 4, 1, 0, 30)])
+
+    def test_timezone_job_runs_once_when_local_clocks_go_back(self):
+        # 01:30 UTC is 02:30 CET, during the second 02:00-03:00 hour in Berlin.
+        try:
+            import pytz
+        except ModuleNotFoundError:
+            self.skipTest("pytz unavailable")
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 10, 26, 12, 0, zone=TZ_BERLIN):
+            scheduler.every().day.at("01:30", "UTC").do(make_mock_job())
+        runs = poll_across(
+            scheduler, TZ_BERLIN, utc(2024, 10, 26, 12), utc(2024, 10, 28, 12)
+        )
+        self.assertEqual(runs, [utc(2024, 10, 27, 1, 30), utc(2024, 10, 28, 1, 30)])
+
+    def test_timezone_job_runs_once_when_its_clocks_go_forward(self):
+        # 02:30 does not exist in New York on 2024-03-10; the job runs at
+        # 03:30 EDT (07:30 UTC) that day, matching the existing DST-gap rule.
+        try:
+            import pytz
+        except ModuleNotFoundError:
+            self.skipTest("pytz unavailable")
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 3, 9, 12, 0, zone=TZ_UTC):
+            scheduler.every().day.at("02:30", "America/New_York").do(make_mock_job())
+        runs = poll_across(scheduler, TZ_UTC, utc(2024, 3, 9, 12), utc(2024, 3, 11, 12))
+        self.assertEqual(runs, [utc(2024, 3, 10, 7, 30), utc(2024, 3, 11, 6, 30)])

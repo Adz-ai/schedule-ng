@@ -203,9 +203,13 @@ class Scheduler:
                  :meth:`next_run <Scheduler.next_run>`
                  or None if no jobs are scheduled
         """
-        if not self.next_run:
+        if not self.jobs:
             return None
-        return (self.next_run - datetime.datetime.now()).total_seconds()
+        next_run = min(self.jobs)._next_run
+        if next_run is None:
+            return None
+        # Subtract in UTC: local times can be an hour off around DST changes.
+        return (next_run - _now_utc()).total_seconds()
 
 
 class Job:
@@ -245,8 +249,8 @@ class Job:
         # datetime of the last run
         self.last_run: Optional[datetime.datetime] = None
 
-        # datetime of the next run
-        self.next_run: Optional[datetime.datetime] = None
+        # datetime of the next run, in UTC. Exposed in local time as next_run.
+        self._next_run: Optional[datetime.datetime] = None
 
         # Weekday to run the job at. Only relevant when unit is 'weeks'.
         # For example, when asking 'every week on tuesday' the start_day is 'tuesday'.
@@ -263,7 +267,21 @@ class Job:
         PeriodicJobs are sortable based on the scheduled time they
         run next.
         """
-        return self.next_run < other.next_run
+        return self._next_run < other._next_run
+
+    @property
+    def next_run(self) -> Optional[datetime.datetime]:
+        """
+        Datetime of the next run, as a naive datetime in local time.
+        """
+        if self._next_run is None:
+            return None
+        return self._next_run.astimezone().replace(tzinfo=None)
+
+    @next_run.setter
+    def next_run(self, value: Optional[datetime.datetime]) -> None:
+        # Naive datetimes are interpreted as local time.
+        self._next_run = None if value is None else value.astimezone(_UTC)
 
     def __str__(self) -> str:
         if hasattr(self.job_func, "__name__"):
@@ -683,8 +701,8 @@ class Job:
         """
         :return: ``True`` if the job should be run now.
         """
-        assert self.next_run is not None, "must run _schedule_next_run before"
-        return datetime.datetime.now() >= self.next_run
+        assert self._next_run is not None, "must run _schedule_next_run before"
+        return _now_utc() >= self._next_run
 
     def run(self):
         """
@@ -707,7 +725,7 @@ class Job:
         self.last_run = datetime.datetime.now()
         self._schedule_next_run()
 
-        if self._is_overdue(self.next_run):
+        if self._is_overdue(self._next_run):
             logger.debug("Cancelling job %s", self)
             return CancelJob
         return ret
@@ -732,117 +750,56 @@ class Job:
         else:
             interval = self.interval
 
-        # Do all computation in the context of the requested timezone
-        now = datetime.datetime.now(self.at_time_zone)
-
-        next_run = now
-
-        if self.start_day is not None:
-            if self.unit != "weeks":
-                raise ScheduleValueError("`unit` should be 'weeks'")
-            next_run = _move_to_next_weekday(next_run, self.start_day)
-
-        if self.at_time is not None:
-            next_run = self._move_to_at_time(next_run)
-
         period = datetime.timedelta(**{self.unit: interval})
-        if interval != 1:
-            next_run += period
+        now = _now_utc()
 
-        while next_run <= now:
-            next_run += period
+        if self.start_day is not None and self.unit != "weeks":
+            raise ScheduleValueError("`unit` should be 'weeks'")
 
-        next_run = self._correct_utc_offset(
-            next_run, fixate_time=(self.at_time is not None)
-        )
+        if self.unit in ("days", "weeks"):
+            # Days and weeks follow the wall clock of the job's timezone, so a
+            # daily job at 10:30 stays at 10:30 when clocks change. Candidates
+            # are compared in UTC, because wall-clock times can repeat.
+            wall = _wall_clock(now, self.at_time_zone)
+            if self.start_day is not None:
+                wall = _move_to_next_weekday(wall, self.start_day)
+            if self.at_time is not None:
+                wall = wall.replace(
+                    hour=self.at_time.hour,
+                    minute=self.at_time.minute,
+                    second=self.at_time.second,
+                    microsecond=0,
+                )
+            if interval != 1:
+                wall += period
+            next_run = _localize(wall, self.at_time_zone)
+            while next_run <= now:
+                wall += period
+                next_run = _localize(wall, self.at_time_zone)
+        else:
+            # Shorter units measure elapsed time, which is unaffected by
+            # clock changes.
+            next_run = now
+            if self.at_time is not None:
+                # The offset is taken from the current time, which keeps
+                # minutes correct in timezones with a non-whole-hour offset.
+                current = now.astimezone(self.at_time_zone)
+                current = current.replace(second=self.at_time.second, microsecond=0)
+                if self.unit == "hours":
+                    current = current.replace(minute=self.at_time.minute)
+                next_run = current.astimezone(_UTC)
+            if interval != 1:
+                next_run += period
+            while next_run <= now:
+                next_run += period
 
-        # To keep the api consistent with older versions, we have to set the 'next_run' to a naive timestamp in the local timezone.
-        # Because we want to stay backwards compatible with older versions.
-        if self.at_time_zone is not None:
-            # Convert back to the local timezone
-            next_run = next_run.astimezone()
-
-            next_run = next_run.replace(tzinfo=None)
-
-        self.next_run = next_run
-
-    def _move_to_at_time(self, moment: datetime.datetime) -> datetime.datetime:
-        """
-        Takes a datetime and moves the time-component to the job's at_time.
-        """
-        if self.at_time is None:
-            return moment
-
-        kwargs = {"second": self.at_time.second, "microsecond": 0}
-
-        if self.unit == "days" or self.start_day is not None:
-            kwargs["hour"] = self.at_time.hour
-
-        if self.unit in ["days", "hours"] or self.start_day is not None:
-            kwargs["minute"] = self.at_time.minute
-
-        moment = moment.replace(**kwargs)  # type: ignore
-
-        # When we set the time elements, we might end up in a different UTC-offset than the current offset.
-        # This happens when we cross into or out of daylight saving time.
-        moment = self._correct_utc_offset(moment, fixate_time=True)
-
-        return moment
-
-    def _correct_utc_offset(
-        self, moment: datetime.datetime, fixate_time: bool
-    ) -> datetime.datetime:
-        """
-        Given a datetime, corrects any mistakes in the utc offset.
-        This is similar to pytz' normalize, but adds the ability to attempt
-        keeping the time-component at the same hour/minute/second.
-        """
-        if self.at_time_zone is None:
-            return moment
-        # Normalize corrects the utc-offset to match the timezone
-        # For example: When a date&time&offset does not exist within a timezone,
-        # the normalization will change the utc-offset to where it is valid.
-        # It does this while keeping the moment in time the same, by moving the
-        # time component opposite of the utc-change.
-        offset_before_normalize = moment.utcoffset()
-        moment = self.at_time_zone.normalize(moment)
-        offset_after_normalize = moment.utcoffset()
-
-        if offset_before_normalize == offset_after_normalize:
-            # There was no change in the utc-offset, datetime didn't change.
-            return moment
-
-        # The utc-offset and time-component has changed
-
-        if not fixate_time:
-            # No need to fixate the time.
-            return moment
-
-        offset_diff = offset_after_normalize - offset_before_normalize
-
-        # Adjust the time to reset the date-time to have the same HH:mm components
-        moment -= offset_diff
-
-        # Check if moving the timestamp back by the utc-offset-difference made it end up
-        # in a moment that does not exist within the current timezone/utc-offset
-        re_normalized_offset = self.at_time_zone.normalize(moment).utcoffset()
-        if re_normalized_offset != offset_after_normalize:
-            # We ended up in a DST Gap. The requested 'at' time does not exist
-            # within the current timezone/utc-offset. As a best effort, we will
-            # schedule the job 1 offset later than possible.
-            # For example, if 02:23 does not exist (because DST moves from 02:00
-            # to 03:00), this will schedule the job at 03:23.
-            moment += offset_diff
-        return moment
+        self._next_run = next_run
 
     def _is_overdue(self, when: datetime.datetime):
         if self.cancel_after is None:
             return False
-        # When cancel_after is timezone-aware but `when` is naive, localize `when`
-        # so the comparison does not raise TypeError.
-        if self.cancel_after.tzinfo is not None and when.tzinfo is None:
-            when = when.astimezone(self.cancel_after.tzinfo)
-        return when > self.cancel_after
+        # Compare in UTC; naive datetimes are in local time.
+        return when.astimezone(_UTC) > self.cancel_after.astimezone(_UTC)
 
     def _decode_datetimestr(
         self, datetime_str: str, formats: List[str]
@@ -951,6 +908,47 @@ def _random_interval(
     if float(earliest).is_integer() and float(latest).is_integer():
         return random.randint(int(earliest), int(latest))
     return random.uniform(earliest, latest)
+
+
+_UTC = datetime.timezone.utc
+
+
+def _now_utc() -> datetime.datetime:
+    return datetime.datetime.now(_UTC)
+
+
+def _wall_clock(moment: datetime.datetime, tz) -> datetime.datetime:
+    """
+    The naive wall-clock time of a UTC moment in `tz`, or in local time if
+    `tz` is None.
+    """
+    return moment.astimezone(tz).replace(tzinfo=None)
+
+
+def _localize(wall: datetime.datetime, tz) -> datetime.datetime:
+    """
+    The UTC moment at which the clock in `tz` shows the naive time `wall`.
+    Local time is used if `tz` is None.
+
+    A wall-clock time that happens twice, when clocks go back, resolves to its
+    first occurrence. A wall-clock time that does not exist, when clocks go
+    forward, is moved forward by the size of the gap: 02:30 becomes 03:30
+    when clocks jump from 02:00 to 03:00.
+    """
+    if tz is None:
+        return wall.replace(fold=0).astimezone(_UTC)
+    if hasattr(tz, "localize"):
+        # pytz timezones need localize() to pick the correct UTC offset.
+        import pytz
+
+        try:
+            aware = tz.localize(wall, is_dst=None)
+        except pytz.AmbiguousTimeError:
+            aware = tz.localize(wall, is_dst=True)
+        except pytz.NonExistentTimeError:
+            aware = tz.localize(wall, is_dst=False)
+        return aware.astimezone(_UTC)
+    return wall.replace(tzinfo=tz, fold=0).astimezone(_UTC)
 
 
 def _move_to_next_weekday(moment: datetime.datetime, weekday: str):
