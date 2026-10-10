@@ -45,3 +45,11 @@ Thanks to all the wonderful folks who have contributed to schedule over the year
 - kurtasov <https://github.com/kurtasov>
 - AnezeR <https://github.com/AnezeR>
 - a-detiste <https://github.com/a-detiste>
+- oyeong011 <https://github.com/oyeong011>
+- rupayon123 <https://github.com/rupayon123>
+- thakoreh <https://github.com/thakoreh>
+- worksbyfriday <https://github.com/worksbyfriday>
+- BP202302 <https://github.com/BP202302>
+- fahhem <https://github.com/fahhem>
+- salpenr <https://github.com/salpenr>
+- koteshyelamati <https://github.com/koteshyelamati>

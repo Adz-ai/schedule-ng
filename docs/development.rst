@@ -5,64 +5,61 @@ These instructions are geared towards people who want to help develop this libra
 
 Preparing for development
 -------------------------
-All required tooling and libraries can be installed using the ``requirements-dev.txt`` file:
+The project uses `uv <https://docs.astral.sh/uv/>`_ to manage its development environment.
+After installing uv, clone the repository; uv installs everything else on first use.
 
 .. code-block:: bash
 
-    pip install -r requirements-dev.txt
+    git clone https://github.com/Adz-ai/schedule-ng.git
+    cd schedule-ng
 
 
 Running tests
 -------------
 
-``pytest`` is used to run tests. Run all tests with coverage and formatting checks:
+Run the tests with coverage:
 
 .. code-block:: bash
 
-    py.test test_schedule.py --flake8 schedule -v --cov schedule --cov-report term-missing
+    uv run pytest --cov --cov-report=term-missing
 
-Formatting the code
--------------------
-This project uses `black formatter <https://black.readthedocs.io/en/stable/>`_.
-To format the code, run:
+The tests run on Linux, macOS and Windows. Tests that need pytz are skipped
+when it is not installed; CI runs the suite both with and without it.
+
+Linting, formatting and type checking
+-------------------------------------
+This project uses `ruff <https://docs.astral.sh/ruff/>`_ and `mypy <https://mypy-lang.org/>`_:
 
 .. code-block:: bash
 
-    black .
-
-Make sure you use version 20.8b1 of black.
+    uv run ruff check
+    uv run ruff format
+    uv run mypy
 
 Compiling documentation
 -----------------------
 
-The documentation is written in `reStructuredText <https://docutils.sourceforge.io/rst.html>`_.
-It is processed using `Sphinx <http://www.sphinx-doc.org/en/1.4.8/tutorial.html>`_ using the `alabaster <https://alabaster.readthedocs.io/en/latest/>`_ theme.
-After installing the development requirements it is just a matter of running:
+The documentation is written in `reStructuredText <https://docutils.sourceforge.io/rst.html>`_
+and built with `Sphinx <https://www.sphinx-doc.org/>`_ using the `alabaster <https://alabaster.readthedocs.io/en/latest/>`_ theme:
 
 .. code-block:: bash
 
-    cd docs
-    make html
+    uv run --only-group docs --with-editable . sphinx-build -W -b html docs docs/_build/html
 
-The resulting html can be found in ``docs/_build/html``
+The resulting html can be found in ``docs/_build/html``.
 
 Publish a new version
 ---------------------
 
-Update the ``HISTORY.rst`` and ``AUTHORS.rst`` files.
-Bump the version in ``setup.py`` and ``docs/conf.py``.
-Merge these changes into master. Finally:
+1. Update ``HISTORY.rst`` and ``AUTHORS.rst``.
+2. Bump ``__version__`` in ``schedule_ng/__init__.py`` and ``release`` in ``docs/conf.py``.
+3. Merge these changes into ``main`` and wait for CI to pass.
+4. Tag and push the release:
 
-.. code-block:: bash
+   .. code-block:: bash
 
-    git tag X.Y.Z -m "Release X.Y.Z"
-    git push --tags
+       git tag -a vX.Y.Z -m "schedule-ng X.Y.Z"
+       git push origin vX.Y.Z
 
-    pip install --upgrade setuptools twine wheel
-    python3 -m build --wheel
-    # For https://test.pypi.org/project/schedule/
-    twine upload --repository schedule-test dist/*
-    # For https://pypi.org/project/schedule/
-    twine upload --repository schedule dist/*
-
-This project follows `semantic versioning <https://semver.org/>`_.`
+5. Approve the deployment to the ``pypi`` environment in the GitHub Actions run.
+   The release workflow publishes to PyPI using trusted publishing.
