@@ -306,6 +306,19 @@ class SchedulerTests(TestCase):
             assert min(minutes) >= 5
             assert max(minutes) <= 30
 
+    def test_do_twice_registers_job_once(self):
+        first, second = make_mock_job("first"), make_mock_job("second")
+        with mock_datetime(2014, 6, 28, 12, 0):
+            job = every().minute
+            job.do(first)
+            job.do(second)
+            assert schedule.jobs == [job]
+
+        with mock_datetime(2014, 6, 28, 12, 1):
+            schedule.run_pending()
+            first.assert_not_called()
+            assert second.call_count == 1
+
     def test_time_range_float(self):
         with mock_datetime(2014, 6, 28, 12, 0):
             # Whole-number floats behave like ints: a whole number of units.

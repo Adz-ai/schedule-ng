@@ -674,7 +674,8 @@ class Job:
                 "Unable to a add job to schedule. "
                 "Job is not associated with an scheduler"
             )
-        self.scheduler.jobs.append(self)
+        if self not in self.scheduler.jobs:
+            self.scheduler.jobs.append(self)
         return self
 
     @property
