@@ -10,6 +10,9 @@ schedule-ng
 .. image:: https://readthedocs.org/projects/schedule-ng/badge/?version=latest
         :target: https://schedule-ng.readthedocs.io
 
+.. image:: https://api.scorecard.dev/projects/github.com/Adz-ai/schedule-ng/badge
+        :target: https://scorecard.dev/viewer/?uri=github.com/Adz-ai/schedule-ng
+
 Python job scheduling for humans. Run Python functions (or any other callable) periodically using a friendly syntax.
 
 **schedule-ng is a maintained, drop-in compatible fork of** `schedule <https://github.com/dbader/schedule>`_

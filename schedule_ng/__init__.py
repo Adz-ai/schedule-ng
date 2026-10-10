@@ -922,8 +922,10 @@ def _random_interval(earliest: float, latest: float) -> float:
     floats give any value in the range.
     """
     if float(earliest).is_integer() and float(latest).is_integer():
-        return random.randint(int(earliest), int(latest))
-    return random.uniform(earliest, latest)
+        # Randomized intervals only spread out load; they don't need to be
+        # unpredictable, so the standard generator is fine.
+        return random.randint(int(earliest), int(latest))  # noqa: S311
+    return random.uniform(earliest, latest)  # noqa: S311
 
 
 _UTC = datetime.timezone.utc

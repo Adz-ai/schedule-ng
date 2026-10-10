@@ -15,6 +15,9 @@ an in-process job scheduler in a single module, `schedule_ng/__init__.py`, with 
   `"schedule"` logger name, `Job.next_run` and `Job.last_run` being naive local datetimes, and
   `repr()`/`str()` output where possible. Any behaviour change needs a strong reason, a test, and an
   entry in `HISTORY.rst` marked as a behaviour change.
+- **Security.** Pin GitHub Actions to full commit SHAs (with a `# vX.Y.Z` comment), keep workflow
+  permissions minimal, and keep `zizmor` and ruff's `S` rules passing. Never weaken these to get CI
+  green. Security reports go through private advisories (`SECURITY.md`), never public issues.
 - **No new runtime dependencies.** pytz stays optional; the code must work with `zoneinfo` alone.
 - **Small, focused commits and PRs.** No drive-by refactors or bulk reformatting mixed with fixes.
 - **Stay in scope.** Decline persistence, retries, distributed execution, job stores and full cron
