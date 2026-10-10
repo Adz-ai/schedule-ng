@@ -526,8 +526,8 @@ class Job:
         After seconds, minutes or hours, as in ``every(5).minutes.weekday``,
         the job keeps its interval, but a run that would fall on a Saturday
         or Sunday moves to midnight on Monday, or to the first time given to
-        :meth:`at` after it. Days are in local time, or in the timezone given
-        to :meth:`between`.
+        :meth:`at` after it. Days follow the timezone given to :meth:`between`,
+        or else to :meth:`at`, or local time.
         """
         return self._on_days(_WEEKDAYS, "weekday")
 
@@ -930,15 +930,17 @@ class Job:
         """
         Move a run that falls outside the .between() window, or on a day
         excluded by .weekday or .weekend, to the first run in the next
-        window. Without .between(), the window is the whole day.
+        window. Without .between(), the window is the whole day in the
+        timezone of at().
         """
+        tz = self.at_time_zone if self._window is None else self._window_tz
         start, end = self._window or ("00:00", "23:59:59")
         days = self._days or _ALL_DAYS
         one_day = datetime.timedelta(days=1)
         # Usually done after one move; more for a window that falls in a DST
         # gap, or that has no time given to at() in it.
         for _ in range(8):
-            wall = _wall_clock(moment, self._window_tz)
+            wall = _wall_clock(moment, tz)
             clock = wall.strftime("%H:%M:%S")
             # Compare at the precision of `end`, so that 17:00 includes 17:00:59.
             before_end = clock[: len(end)] <= end
@@ -958,7 +960,7 @@ class Job:
             wall_start = datetime.datetime.combine(
                 day, datetime.time.fromisoformat(start)
             )
-            window_start = _localize(wall_start, self._window_tz)
+            window_start = _localize(wall_start, tz)
             if window_start <= moment:
                 # The clocks went back, and `start` is coming round again.
                 window_start = moment + (wall_start - wall)

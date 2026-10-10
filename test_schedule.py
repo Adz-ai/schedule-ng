@@ -2127,11 +2127,12 @@ class WeekdayWeekendTests(TestCase):
     def test_filter_keeps_at_time_of_hourly_jobs(self):
         with mock_datetime(2024, 1, 19, 23, 50):
             job = every().hour.at(":30").weekday.do(make_mock_job())
-            # Midnight in Berlin is 04:30 in India, so :15 there comes at 00:45.
+            # The days follow the timezone given to at(): Monday starts in
+            # India at 19:30 on Sunday in Berlin, so :15 there comes at 19:45.
             kolkata = ZoneInfo("Asia/Kolkata")
             india = every().hour.at(":15", kolkata).weekday.do(make_mock_job())
         assert job.next_run == datetime.datetime(2024, 1, 22, 0, 30)
-        assert india.next_run == datetime.datetime(2024, 1, 22, 0, 45)
+        assert india.next_run == datetime.datetime(2024, 1, 21, 19, 45)
 
     def test_filter_runs_resume_on_monday(self):
         scheduler = schedule.Scheduler()
@@ -2388,6 +2389,20 @@ class BetweenTests(TestCase):
                 .do(make_mock_job())
             )
         assert job.next_run == datetime.datetime(2024, 1, 21, 23, 10)
+
+    def test_window_timezone_wins_over_at_timezone(self):
+        # Without between(), Monday would start in India (19:45 on Sunday
+        # in Berlin); the window is in Berlin time, so it waits for Monday
+        # there, at the first :15 in India after midnight.
+        with mock_datetime(2024, 1, 19, 23, 50):
+            kolkata = ZoneInfo("Asia/Kolkata")
+            job = (
+                every()
+                .hour.at(":15", kolkata)
+                .weekday.between("00:00", "23:59")
+                .do(make_mock_job())
+            )
+        assert job.next_run == datetime.datetime(2024, 1, 22, 0, 45)
 
     def test_with_at(self):
         with mock_datetime(2024, 1, 15, 7, 0):
