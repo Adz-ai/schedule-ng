@@ -19,6 +19,28 @@ First release of schedule-ng, a maintained fork of schedule 1.2.2.
 - Make the test suite run on Windows.
 - Replace setup.py, setup.cfg and tox with a single pyproject.toml.
 
+Issue and pull request numbers below refer to the original
+`dbader/schedule <https://github.com/dbader/schedule>`_ repository.
+
+Bug fixes:
+
+- ``every(0)`` and negative intervals raise ``ScheduleValueError`` instead of
+  hanging forever (#658). Thanks @oyeong011!
+- A rejected ``.at()`` or ``.until()`` call no longer changes the job (#659).
+  Thanks @rupayon123!
+- ``repr()`` of a job with interval 1 and no unit no longer crashes (#646, #652,
+  #651). Thanks Hiren and Friday!
+- ``str(job)`` includes the ``.at()`` time, so jobs at different times can be
+  told apart (#635, #663). Thanks @BP202302!
+- ``.until()`` accepts timezone-aware datetimes (#657). Thanks Kotesh Kumar
+  Yelamati!
+- ``every(1.0).to(2.0)`` no longer raises ``TypeError`` on Python 3.12+ (#593).
+- Calling ``.do()`` twice on a job no longer registers it twice (#215, #305).
+- Fix two misleading error messages: an unfilled ``{}`` for invalid hours, and
+  "latest is greater than interval" when it was smaller.
+- Don't call ``str()`` on jobs in debug log calls (#632). Thanks @fahhem!
+- Add a regression test for midnight timezone jobs (#664). Thanks @salpenr!
+
 Fixes for daylight saving time (DST) changes:
 
 - Interval jobs (seconds, minutes, hours) no longer pause for an hour when
