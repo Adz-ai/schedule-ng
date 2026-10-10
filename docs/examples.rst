@@ -46,6 +46,58 @@ Run a job every x minute
         schedule.run_pending()
         time.sleep(1)
 
+Run a job more often than every second
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Intervals can be floats, so there is no separate unit for milliseconds.
+Call ``run_pending()`` at least as often as the shortest interval.
+
+.. code-block:: python
+
+    import schedule_ng as schedule
+    import time
+
+    def job():
+        print("I'm working...")
+
+    schedule.every(0.25).seconds.do(job)  # every 250 milliseconds
+
+    while True:
+        schedule.run_pending()
+        time.sleep(0.05)
+
+Run a job immediately, then on its schedule
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A new job first runs after one interval. To also run it straight away, call
+``run()`` on the job. This runs it now and schedules the next run one interval
+later.
+
+.. code-block:: python
+
+    import schedule_ng as schedule
+
+    def job():
+        print("I'm working...")
+
+    schedule.every(10).minutes.do(job).run()
+
+Pick the day of the week at runtime
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The weekday properties can be looked up by name, for example from a
+configuration file:
+
+.. code-block:: python
+
+    import schedule_ng as schedule
+
+    def job():
+        print("I'm working...")
+
+    day = "friday"
+    getattr(schedule.every(), day).at("09:00").do(job)
+
 Use a decorator to schedule a job
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

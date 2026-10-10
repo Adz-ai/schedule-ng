@@ -42,12 +42,21 @@ It might be that your IDE uses a different Python interpreter installation.
 
 Still having problems? Use Google and StackOverflow before submitting an issue.
 
-ModuleNotFoundError: ModuleNotFoundError: No module named 'pytz'
-----------------------------------------------------------------
+ScheduleValueError: Unknown timezone
+------------------------------------
 
-This error happens when you try to set a timezone in ``.at()`` without having the `pytz <https://pypi.org/project/pytz/>`_ package installed.
-Pytz is a required dependency when working with timezones.
-To resolve this issue, install the ``pytz`` module by running ``pip install pytz``.
+The timezone name passed to ``.at()`` is not known to Python's :mod:`zoneinfo`.
+Check the spelling against the `list of timezone names <https://en.wikipedia.org/wiki/List_of_tz_database_time_zones>`_.
+On Windows, install the `tzdata <https://pypi.org/project/tzdata/>`_ package: ``pip install tzdata``.
+pytz is no longer required for timezones.
+
+Can I schedule jobs more often than every second?
+-------------------------------------------------
+Yes, intervals can be floats: ``schedule.every(0.25).seconds``. See :doc:`Examples <examples>`.
+
+Can I run a job right away, and then on its schedule?
+-----------------------------------------------------
+Yes, call ``run()`` on the job. See :doc:`Examples <examples>`.
 
 Does schedule support time zones?
 ---------------------------------
