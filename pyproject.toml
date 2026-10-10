@@ -84,9 +84,12 @@ extend-exclude = ["docs"]
 [tool.ruff.lint]
 # Correctness-focused rules only; style rules get adopted deliberately,
 # not in bulk, to keep the history readable.
-select = ["E4", "E7", "E9", "F", "B"]
-ignore = ["B018"] # tests use bare attribute access to exercise properties
+select = ["E4", "E7", "E9", "F", "B", "S"]
+ignore = [
+  "B018", # tests use bare attribute access to exercise properties
+  "S101", # asserts guard against API misuse, not security decisions
+]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests import pytz only to check availability, and create unused jobs on purpose.
-"test_schedule.py" = ["F401", "F841"]
+"test_schedule.py" = ["F401", "F841", "S301"] # S301: tests pickle their own objects
