@@ -17,6 +17,8 @@ History
   reached its end of life is supported, and a version is dropped in the first
   minor release after its end-of-life date.
 - ``run_all(delay_seconds)`` only waits between jobs, not after the last one.
+- Calling ``run_pending()`` on the same scheduler from several threads no
+  longer runs a due job more than once (#630).
 
 1.3.1 (2026-10-10)
 ++++++++++++++++++

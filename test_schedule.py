@@ -2,8 +2,12 @@
 
 import datetime
 import functools
+import copy
 import io
 import itertools
+import pickle
+import threading
+import time
 import struct
 from unittest import mock, TestCase
 from zoneinfo import ZoneInfo
@@ -1398,6 +1402,51 @@ class SchedulerTests(TestCase):
             schedule.run_all(delay_seconds=2)
         assert mock_job.call_count == 3
         assert sleep.call_args_list == [mock.call(2), mock.call(2)]
+
+    def test_run_pending_from_several_threads_runs_job_once(self):
+        # Upstream #630: two threads calling run_pending() on one scheduler
+        # both saw the job as due and ran it twice.
+        scheduler = schedule.Scheduler()
+        calls = []
+
+        def slow_job():
+            time.sleep(0.05)
+            calls.append(1)
+
+        job = scheduler.every().hour.do(slow_job)
+        job.next_run = datetime.datetime.now() - datetime.timedelta(seconds=1)
+        barrier = threading.Barrier(4)
+
+        def poll():
+            barrier.wait()
+            scheduler.run_pending()
+
+        threads = [threading.Thread(target=poll) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert len(calls) == 1
+
+    def test_job_can_call_run_pending(self):
+        # The lock is re-entrant, so this does not deadlock.
+        scheduler = schedule.Scheduler()
+        calls = []
+        job = scheduler.every().hour.do(lambda: calls.append(scheduler.run_pending()))
+        job.run()
+        assert calls == [None]
+
+    def test_scheduler_can_be_pickled_and_copied(self):
+        scheduler = schedule.Scheduler()
+        job = scheduler.every(10).minutes.do(print)
+        for restored in (
+            pickle.loads(pickle.dumps(scheduler)),
+            copy.deepcopy(scheduler),
+        ):
+            assert len(restored.jobs) == 1
+            assert restored.jobs[0].next_run == job.next_run
+            restored.run_pending()  # the lock works after restoring
+        pickle.loads(pickle.dumps(job))
 
     def test_run_all_with_decorator(self):
         mock_job = make_mock_job()
