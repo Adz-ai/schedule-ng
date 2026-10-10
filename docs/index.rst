@@ -1,15 +1,12 @@
-schedule
-========
+schedule-ng
+===========
 
 
 .. image:: https://github.com/Adz-ai/schedule-ng/actions/workflows/ci.yml/badge.svg
         :target: https://github.com/Adz-ai/schedule-ng/actions/workflows/ci.yml
 
-.. image:: https://coveralls.io/repos/dbader/schedule/badge.svg?branch=master
-        :target: https://coveralls.io/r/dbader/schedule
-
-.. image:: https://img.shields.io/pypi/v/schedule.svg
-        :target: https://pypi.python.org/pypi/schedule
+.. image:: https://img.shields.io/pypi/v/schedule-ng.svg
+        :target: https://pypi.org/project/schedule-ng/
 
 Python job scheduling for humans. Run Python functions (or any other callable) periodically using a friendly syntax.
 
@@ -99,7 +96,7 @@ Please also use the search feature in the issue tracker beforehand to avoid crea
 About Schedule
 --------------
 
-Created by `Daniel Bader <https://dbader.org/>`__ - `@dbader_org <https://twitter.com/dbader_org>`_
+schedule-ng is a maintained fork of `schedule <https://github.com/dbader/schedule>`_, originally created by Daniel Bader.
 
 Inspired by `Adam Wiggins' <https://github.com/adamwiggins>`_ article `"Rethinking Cron" <https://adam.herokuapp.com/past/2010/4/13/rethinking_cron/>`_ and the `clockwork <https://github.com/Rykian/clockwork>`_ Ruby module.
 

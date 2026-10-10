@@ -11,8 +11,8 @@ license = "MIT"
 license-files = ["LICENSE.txt"]
 requires-python = ">= 3.9"
 dependencies = []
-authors = [{ name = "Daniel Bader", email = "mail@dbader.org" }]
-maintainers = [{ name = "Adarssh" }]
+authors = [{ name = "Adarssh Athithan" }]
+maintainers = [{ name = "Adarssh Athithan" }]
 keywords = [
   "schedule",
   "periodic",

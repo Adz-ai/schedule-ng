@@ -74,8 +74,11 @@ If the original project becomes active again, this fork will happily contribute 
 Meta
 ----
 
-Original author: Daniel Bader - mail@dbader.org. Thanks to Sijmen Huizenga and everyone listed in
-`AUTHORS.rst <https://github.com/Adz-ai/schedule-ng/blob/main/AUTHORS.rst>`_ for their work on ``schedule``.
+Maintained by Adarssh Athithan. ``schedule`` was originally created by Daniel Bader. Thanks to him, Sijmen Huizenga
+and everyone listed in `AUTHORS.rst <https://github.com/Adz-ai/schedule-ng/blob/main/AUTHORS.rst>`_ for their work on it.
+
+Please report problems with schedule-ng in `its issue tracker <https://github.com/Adz-ai/schedule-ng/issues>`_,
+not to the original project.
 
 Inspired by `Adam Wiggins' <https://github.com/adamwiggins>`_ article `"Rethinking Cron" <https://adam.herokuapp.com/past/2010/4/13/rethinking_cron/>`_ and the `clockwork <https://github.com/Rykian/clockwork>`_ Ruby module.
 

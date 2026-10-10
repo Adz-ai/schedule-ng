@@ -47,7 +47,7 @@ import re
 import time
 from typing import Set, List, Optional, Callable, Union
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 logger = logging.getLogger("schedule")
 

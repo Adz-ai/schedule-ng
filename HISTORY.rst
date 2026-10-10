@@ -3,6 +3,14 @@
 History
 -------
 
+1.3.1 (2026-10-10)
+++++++++++++++++++
+
+- List the schedule-ng maintainer as the package author on PyPI, instead of
+  the original author of schedule. Daniel Bader remains credited as the
+  original author and copyright holder.
+- Point the documentation's links and issue tracker at schedule-ng.
+
 1.3.0 (2026-10-10)
 ++++++++++++++++++
 
