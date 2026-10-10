@@ -1390,6 +1390,15 @@ class SchedulerTests(TestCase):
         schedule.run_all()
         assert mock_job.call_count == 3
 
+    def test_run_all_delay_only_between_jobs(self):
+        mock_job = make_mock_job()
+        for _ in range(3):
+            every().minute.do(mock_job)
+        with mock.patch("schedule_ng.time.sleep") as sleep:
+            schedule.run_all(delay_seconds=2)
+        assert mock_job.call_count == 3
+        assert sleep.call_args_list == [mock.call(2), mock.call(2)]
+
     def test_run_all_with_decorator(self):
         mock_job = make_mock_job()
 
