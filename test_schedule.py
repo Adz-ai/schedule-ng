@@ -306,6 +306,20 @@ class SchedulerTests(TestCase):
             assert min(minutes) >= 5
             assert max(minutes) <= 30
 
+    def test_time_range_float(self):
+        with mock_datetime(2014, 6, 28, 12, 0):
+            # Whole-number floats behave like ints: a whole number of units.
+            for _ in range(20):
+                job = every(1.0).to(3.0).seconds.do(make_mock_job())
+                delay = (job.next_run - datetime.datetime.now()).total_seconds()
+                assert delay in (1, 2, 3)
+
+            # Fractional floats pick any duration in the range.
+            for _ in range(20):
+                job = every(0.5).to(1.5).seconds.do(make_mock_job())
+                delay = (job.next_run - datetime.datetime.now()).total_seconds()
+                assert 0.5 <= delay <= 1.5
+
     def test_time_range_repr(self):
         mock_job = make_mock_job()
 

@@ -727,7 +727,7 @@ class Job:
                         self.latest, self.interval
                     )
                 )
-            interval = random.randint(self.interval, self.latest)
+            interval = _random_interval(self.interval, self.latest)
         else:
             interval = self.interval
 
@@ -935,6 +935,21 @@ def repeat(job, *args, **kwargs):
         return decorated_function
 
     return _schedule_decorator
+
+
+def _random_interval(
+    earliest: Union[int, float], latest: Union[int, float]
+) -> Union[int, float]:
+    """
+    Pick a random interval between `earliest` and `latest`, inclusive.
+
+    Whole numbers (including floats such as 2.0) give a whole number, as
+    random.randint() did before Python 3.12 stopped accepting floats. Other
+    floats give any value in the range.
+    """
+    if float(earliest).is_integer() and float(latest).is_integer():
+        return random.randint(int(earliest), int(latest))
+    return random.uniform(earliest, latest)
 
 
 def _move_to_next_weekday(moment: datetime.datetime, weekday: str):
