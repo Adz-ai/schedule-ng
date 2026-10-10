@@ -13,7 +13,7 @@ Report them privately through GitHub instead:
 [Report a vulnerability](https://github.com/Adz-ai/schedule-ng/security/advisories/new).
 
 Include what you found, how to reproduce it, and which versions are affected.
-You can expect an acknowledgement within 7 days. Once a fix is released, the
+You can expect an acknowledgement within 14 days. Once a fix is released, the
 advisory is published and you are credited, unless you prefer not to be.
 
 ## Good to know
