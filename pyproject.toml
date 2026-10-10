@@ -42,6 +42,7 @@ classifiers = [
 timezone = ["pytz"]
 
 [project.urls]
+Documentation = "https://schedule-ng.readthedocs.io"
 Repository = "https://github.com/Adz-ai/schedule-ng"
 Issues = "https://github.com/Adz-ai/schedule-ng/issues"
 Changelog = "https://github.com/Adz-ai/schedule-ng/blob/main/HISTORY.rst"

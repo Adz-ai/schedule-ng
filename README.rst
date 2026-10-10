@@ -7,6 +7,9 @@ schedule-ng
 .. image:: https://img.shields.io/pypi/v/schedule-ng.svg
         :target: https://pypi.org/project/schedule-ng/
 
+.. image:: https://readthedocs.org/projects/schedule-ng/badge/?version=latest
+        :target: https://schedule-ng.readthedocs.io
+
 Python job scheduling for humans. Run Python functions (or any other callable) periodically using a friendly syntax.
 
 **schedule-ng is a maintained, drop-in compatible fork of** `schedule <https://github.com/dbader/schedule>`_
@@ -52,6 +55,11 @@ Usage
     while True:
         schedule.run_pending()
         time.sleep(1)
+
+Documentation
+-------------
+
+schedule-ng's documentation lives at `schedule-ng.readthedocs.io <https://schedule-ng.readthedocs.io>`_.
 
 Migrating from schedule
 -----------------------
