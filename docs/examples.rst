@@ -116,6 +116,26 @@ skips the other days, starting again at midnight.
     schedule.every().weekend.at("10:30", "Europe/Amsterdam").do(job)
     schedule.every(15).minutes.weekday.do(job)
 
+Run a job only between two times of day
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``.between()`` limits a job that runs every few seconds, minutes or hours to
+a window. Both ends are included, and a window whose end is earlier than its
+start crosses midnight.
+
+.. code-block:: python
+
+    import schedule_ng as schedule
+
+    def job():
+        print("I'm working...")
+
+    schedule.every(10).minutes.between("09:00", "17:00").do(job)
+    schedule.every().hour.between("22:00", "06:00", "Europe/Amsterdam").do(job)
+
+    # Office hours: weekdays from 09:00 to 17:30
+    schedule.every(15).minutes.weekday.between("09:00", "17:30").do(job)
+
 Use a decorator to schedule a job
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
