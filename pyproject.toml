@@ -1,26 +1,89 @@
 [build-system]
-requires = ["setuptools >= 61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
 
 [project]
-name = "schedule"
-description = "Job scheduling for humans."
-dynamic = ["version", "classifiers", "keywords", "authors"]
+name = "schedule-ng"
+description = "Job scheduling for humans. A maintained, drop-in successor to schedule."
+dynamic = ["version"]
 readme = "README.rst"
-license = {text = "MIT License"}
-
-requires-python = ">= 3.7"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+requires-python = ">= 3.9"
 dependencies = []
-
-maintainers = [
-  {name = "Sijmen Huizenga"}
+authors = [{ name = "Daniel Bader", email = "mail@dbader.org" }]
+maintainers = [{ name = "Adarssh" }]
+keywords = [
+  "schedule",
+  "periodic",
+  "jobs",
+  "scheduling",
+  "clockwork",
+  "cron",
+  "scheduler",
+  "job scheduling",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
 ]
 
 [project.optional-dependencies]
 timezone = ["pytz"]
 
 [project.urls]
-Documentation = "https://schedule.readthedocs.io"
-Repository = "https://github.com/dbader/schedule.git"
-Issues = "https://github.com/dbader/schedule/issues"
-Changelog = "https://github.com/dbader/schedule/blob/master/HISTORY.rst"
+Repository = "https://github.com/Adz-ai/schedule-ng"
+Issues = "https://github.com/Adz-ai/schedule-ng/issues"
+Changelog = "https://github.com/Adz-ai/schedule-ng/blob/main/HISTORY.rst"
+
+[dependency-groups]
+dev = [
+  "pytest >= 8",
+  "pytest-cov",
+  "mypy",
+  "pytz",
+  "types-pytz",
+  "tzdata; sys_platform == 'win32'",
+  "ruff",
+]
+
+[tool.hatch.version]
+path = "schedule_ng/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["schedule_ng", "test_schedule.py", "README.rst", "HISTORY.rst", "LICENSE.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["test_schedule.py"]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+source = ["schedule_ng"]
+branch = true
+
+[tool.mypy]
+files = ["schedule_ng"]
+
+[tool.ruff]
+target-version = "py39"
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+# Correctness-focused rules only; style rules get adopted deliberately,
+# not in bulk, to keep the history readable.
+select = ["E4", "E7", "E9", "F", "B"]
+ignore = ["B018"] # tests use bare attribute access to exercise properties
+
+[tool.ruff.lint.per-file-ignores]
+# Tests import pytz only to check availability, and create unused jobs on purpose.
+"test_schedule.py" = ["F401", "F841"]

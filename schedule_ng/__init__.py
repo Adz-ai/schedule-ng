@@ -1,7 +1,7 @@
 """
 Python job scheduling for humans.
 
-github.com/dbader/schedule
+github.com/Adz-ai/schedule-ng, a maintained fork of github.com/dbader/schedule
 
 An in-process scheduler for periodic jobs that uses the builder pattern
 for configuration. Schedule lets you run Python functions (or any other
@@ -15,7 +15,7 @@ Features:
     - A simple to use API for scheduling jobs.
     - Very lightweight and no external dependencies.
     - Excellent test coverage.
-    - Tested on Python 3.7, 3.8, 3.9, 3.10, 3.11 and 3.12
+    - Tested on Python 3.9 to 3.14 on Linux, macOS and Windows
 
 Usage:
     >>> import schedule
@@ -46,6 +46,8 @@ import random
 import re
 import time
 from typing import Set, List, Optional, Callable, Union
+
+__version__ = "1.3.0.dev0"
 
 logger = logging.getLogger("schedule")
 

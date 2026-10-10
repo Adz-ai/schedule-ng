@@ -11,8 +11,8 @@ from zoneinfo import ZoneInfo
 # "class already defined", and "too many public methods" messages:
 # pylint: disable-msg=R0201,C0111,E0102,R0904,R0901
 
-import schedule
-from schedule import (
+import schedule_ng as schedule
+from schedule_ng import (
     every,
     repeat,
     ScheduleError,

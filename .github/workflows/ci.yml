@@ -1,91 +1,45 @@
-name: Tests
+name: CI
 
 on:
   push:
-    branches:
-      - master
+    branches: [main]
   pull_request:
-    branches:
-      - master
+
+permissions:
+  contents: read
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }}, ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
-      max-parallel: 6
+      fail-fast: false
       matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: pip install tox tox-gh-actions
-      - name: Tests
-        run: tox
-      - name: Coveralls
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_FLAG_NAME: python-${{ matrix.python-version }}
-          COVERALLS_PARALLEL: true
-        run: |
-          pip3 install coveralls
-          coveralls --service=github
-  coveralls:
-    # Notify coveralls that the built has finished so they can
-    # combine the results and post a comment with the summary.
-    name: coverage push
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.11
-      - name: Finished
-        run: |
-          pip3 install coveralls
-          coveralls --finish --service=github
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tests (without pytz)
+        run: uv run --no-group dev --with pytest --with "tzdata; sys_platform == 'win32'" pytest
+      - name: Tests (with pytz)
+        run: uv run pytest --cov --cov-report=term-missing
 
-  docs:
+  lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.11
-      - name: Install dependencies
-        run: pip install tox
-      - name: Check docs
-        run: tox -e docs
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run mypy
 
-  formatting:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.11
-      - name: Install dependencies
-        run: pip install tox
-      - name: Check formatting
-        run: tox -e format
-
-  setuppy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.11
-      - name: Install dependencies
-        run: pip install tox
-      - name: Check docs
-        run: tox -e setuppy
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build
+      - run: uvx twine check --strict dist/*

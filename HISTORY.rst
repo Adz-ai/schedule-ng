@@ -3,6 +3,18 @@
 History
 -------
 
+1.3.0 (unreleased)
+++++++++++++++++++
+
+First release of schedule-ng, a maintained fork of schedule 1.2.2.
+
+- Rename the distribution to ``schedule-ng`` and the package to ``schedule_ng``.
+  The API and the ``"schedule"`` logger name are unchanged.
+- Require Python 3.9 or newer; test on Python 3.9 to 3.14 (including free-threaded 3.14t)
+  on Linux, macOS and Windows.
+- Make the test suite run on Windows.
+- Replace setup.py, setup.cfg and tox with a single pyproject.toml.
+
 1.2.2 (2024-05-25)
 ++++++++++++++++++
 

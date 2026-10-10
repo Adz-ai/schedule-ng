@@ -46,3 +46,9 @@ docs/_build
 # For Idea (e.g. PyCharm) users
 .idea
 *.iml
+
+# Tool caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.venv/
