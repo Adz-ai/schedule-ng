@@ -584,7 +584,7 @@ class Job:
                 )
         elif self.unit == "hours":
             hour = 0
-        elif self.unit == "minutes":
+        else:  # minutes
             hour = 0
             minute = 0
         hour = int(hour)

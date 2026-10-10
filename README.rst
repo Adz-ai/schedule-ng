@@ -4,6 +4,10 @@ schedule-ng
 .. image:: https://github.com/Adz-ai/schedule-ng/actions/workflows/ci.yml/badge.svg
         :target: https://github.com/Adz-ai/schedule-ng/actions/workflows/ci.yml
 
+.. image:: https://img.shields.io/badge/coverage-100%25-brightgreen
+        :target: https://github.com/Adz-ai/schedule-ng/blob/main/pyproject.toml
+        :alt: Coverage: 100%, enforced in CI
+
 .. image:: https://img.shields.io/pypi/v/schedule-ng.svg
         :target: https://pypi.org/project/schedule-ng/
 
@@ -22,7 +26,7 @@ keeps working by changing one import.
 - A simple to use API for scheduling jobs, made for humans.
 - In-process scheduler for periodic jobs. No extra processes needed!
 - Very lightweight and no external dependencies.
-- Excellent test coverage.
+- 100% test coverage (lines and branches), enforced in CI.
 - Tested on Python 3.11 to 3.15 on Linux, macOS and Windows, including free-threaded builds.
 
 Usage
