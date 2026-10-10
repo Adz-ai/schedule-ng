@@ -322,7 +322,9 @@ class Job:
             return fmt % dict(
                 interval=self.interval,
                 latest=self.latest,
-                unit=(self.unit[:-1] if self.interval == 1 and self.unit else self.unit),
+                unit=(
+                    self.unit[:-1] if self.interval == 1 and self.unit else self.unit
+                ),
                 call_repr=call_repr,
                 timestats=timestats,
             )

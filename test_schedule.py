@@ -770,6 +770,10 @@ class SchedulerTests(TestCase):
     def test_tz_daily_midnight_does_not_run_on_every_poll(self):
         # Issue #609: the host is UTC, but the job runs just after midnight
         # in a timezone ahead of UTC. Its next_run must stay in the future.
+        try:
+            import pytz
+        except ModuleNotFoundError:
+            self.skipTest("pytz unavailable")
         for month, utc_hour in [(12, 23), (7, 22)]:
             for zone in ["Europe/Berlin", "Europe/Amsterdam"]:
                 for minute in [0, 5, 30]:
