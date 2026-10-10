@@ -62,4 +62,5 @@ Publish a new version
        git push origin vX.Y.Z
 
 5. Approve the deployment to the ``pypi`` environment in the GitHub Actions run.
-   The release workflow publishes to PyPI using trusted publishing.
+   The release workflow publishes to PyPI using trusted publishing, then creates
+   the GitHub release with the files signed by Sigstore.
