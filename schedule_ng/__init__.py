@@ -45,7 +45,8 @@ import logging
 import random
 import re
 import time
-from typing import Set, List, Optional, Callable, Union
+from collections.abc import Callable
+from typing import Any, Self, TypeVar
 
 __version__ = "1.3.1"
 
@@ -86,7 +87,7 @@ class Scheduler:
     """
 
     def __init__(self) -> None:
-        self.jobs: List[Job] = []
+        self.jobs: list[Job] = []
 
     def run_pending(self) -> None:
         """
@@ -102,7 +103,7 @@ class Scheduler:
         for job in sorted(runnable_jobs):
             self._run_job(job)
 
-    def run_all(self, delay_seconds: int = 0) -> None:
+    def run_all(self, delay_seconds: float = 0) -> None:
         """
         Run all jobs regardless if they are scheduled to run or not.
 
@@ -122,7 +123,7 @@ class Scheduler:
                 time.sleep(delay_seconds)
             self._run_job(job)
 
-    def get_jobs(self, tag: Optional[Hashable] = None) -> List["Job"]:
+    def get_jobs(self, tag: Hashable | None = None) -> list["Job"]:
         """
         Gets scheduled jobs marked with the given tag, or all jobs
         if tag is omitted.
@@ -135,7 +136,7 @@ class Scheduler:
         else:
             return [job for job in self.jobs if tag in job.tags]
 
-    def clear(self, tag: Optional[Hashable] = None) -> None:
+    def clear(self, tag: Hashable | None = None) -> None:
         """
         Deletes scheduled jobs marked with the given tag, or all jobs
         if tag is omitted.
@@ -162,7 +163,7 @@ class Scheduler:
         except ValueError:
             logger.debug('Cancelling not-scheduled job "%s"', job)
 
-    def every(self, interval: int = 1) -> "Job":
+    def every(self, interval: float = 1) -> "Job":
         """
         Schedule a new periodic job.
 
@@ -177,9 +178,7 @@ class Scheduler:
         if isinstance(ret, CancelJob) or ret is CancelJob:
             self.cancel_job(job)
 
-    def get_next_run(
-        self, tag: Optional[Hashable] = None
-    ) -> Optional[datetime.datetime]:
+    def get_next_run(self, tag: Hashable | None = None) -> datetime.datetime | None:
         """
         Datetime when the next job should run.
 
@@ -198,7 +197,7 @@ class Scheduler:
     next_run = property(get_next_run)
 
     @property
-    def idle_seconds(self) -> Optional[float]:
+    def idle_seconds(self) -> float | None:
         """
         :return: Number of seconds until
                  :meth:`next_run <Scheduler.next_run>`
@@ -231,47 +230,54 @@ class Job:
     method, which also defines its `interval`.
     """
 
-    def __init__(self, interval: int, scheduler: Optional[Scheduler] = None):
+    def __init__(self, interval: float, scheduler: Scheduler | None = None) -> None:
         if interval <= 0:
             raise ScheduleValueError("Interval must be greater than zero")
-        self.interval: int = interval  # pause interval * unit between runs
-        self.latest: Optional[int] = None  # upper limit to the interval
-        self.job_func: Optional[functools.partial] = None  # the job job_func to run
+        self.interval: float = interval  # pause interval * unit between runs
+        self.latest: float | None = None  # upper limit to the interval
+        self.job_func: functools.partial[Any] | None = None  # the job job_func to run
 
         # time units, e.g. 'minutes', 'hours', ...
-        self.unit: Optional[str] = None
+        self.unit: str | None = None
 
         # optional time at which this job runs
-        self.at_time: Optional[datetime.time] = None
+        self.at_time: datetime.time | None = None
 
         # optional time zone of the self.at_time field. Only relevant when at_time is not None
-        self.at_time_zone: Optional[datetime.tzinfo] = None
+        self.at_time_zone: datetime.tzinfo | None = None
 
         # datetime of the last run
-        self.last_run: Optional[datetime.datetime] = None
+        self.last_run: datetime.datetime | None = None
 
         # datetime of the next run, in UTC. Exposed in local time as next_run.
-        self._next_run: Optional[datetime.datetime] = None
+        self._next_run: datetime.datetime | None = None
 
         # Weekday to run the job at. Only relevant when unit is 'weeks'.
         # For example, when asking 'every week on tuesday' the start_day is 'tuesday'.
-        self.start_day: Optional[str] = None
+        self.start_day: str | None = None
 
         # optional time of final run
-        self.cancel_after: Optional[datetime.datetime] = None
+        self.cancel_after: datetime.datetime | None = None
 
-        self.tags: Set[Hashable] = set()  # unique set of tags for the job
-        self.scheduler: Optional[Scheduler] = scheduler  # scheduler to register with
+        self.tags: set[Hashable] = set()  # unique set of tags for the job
+        self.scheduler: Scheduler | None = scheduler  # scheduler to register with
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: "Job") -> bool:
         """
         PeriodicJobs are sortable based on the scheduled time they
         run next.
         """
+        assert self._next_run is not None and other._next_run is not None, (
+            "jobs must be scheduled before they can be compared"
+        )
         return self._next_run < other._next_run
 
+    def _job_func_name(self) -> str:
+        name = getattr(self.job_func, "__name__", None)
+        return name if name is not None else repr(self.job_func)
+
     @property
-    def next_run(self) -> Optional[datetime.datetime]:
+    def next_run(self) -> datetime.datetime | None:
         """
         Datetime of the next run, as a naive datetime in local time.
         """
@@ -280,15 +286,12 @@ class Job:
         return self._next_run.astimezone().replace(tzinfo=None)
 
     @next_run.setter
-    def next_run(self, value: Optional[datetime.datetime]) -> None:
+    def next_run(self, value: datetime.datetime | None) -> None:
         # Naive datetimes are interpreted as local time.
         self._next_run = None if value is None else value.astimezone(_UTC)
 
     def __str__(self) -> str:
-        if hasattr(self.job_func, "__name__"):
-            job_func_name = self.job_func.__name__  # type: ignore
-        else:
-            job_func_name = repr(self.job_func)
+        job_func_name = self._job_func_name()
 
         return ("Job(interval={}, unit={}, {}do={}, args={}, kwargs={})").format(
             self.interval,
@@ -299,11 +302,11 @@ class Job:
             "{}" if self.job_func is None else self.job_func.keywords,
         )
 
-    def __repr__(self):
-        def format_time(t):
+    def __repr__(self) -> str:
+        def format_time(t: datetime.datetime | None) -> str:
             return t.strftime("%Y-%m-%d %H:%M:%S") if t else "[never]"
 
-        def is_repr(j):
+        def is_repr(j: object) -> bool:
             return not isinstance(j, Job)
 
         timestats = "(last run: %s, next run: %s)" % (
@@ -311,10 +314,7 @@ class Job:
             format_time(self.next_run),
         )
 
-        if hasattr(self.job_func, "__name__"):
-            job_func_name = self.job_func.__name__
-        else:
-            job_func_name = repr(self.job_func)
+        job_func_name = self._job_func_name()
 
         if self.job_func is not None:
             args = [repr(x) if is_repr(x) else str(x) for x in self.job_func.args]
@@ -349,62 +349,62 @@ class Job:
             )
 
     @property
-    def second(self):
+    def second(self) -> Self:
         if self.interval != 1:
             raise IntervalError("Use seconds instead of second")
         return self.seconds
 
     @property
-    def seconds(self):
+    def seconds(self) -> Self:
         self.unit = "seconds"
         return self
 
     @property
-    def minute(self):
+    def minute(self) -> Self:
         if self.interval != 1:
             raise IntervalError("Use minutes instead of minute")
         return self.minutes
 
     @property
-    def minutes(self):
+    def minutes(self) -> Self:
         self.unit = "minutes"
         return self
 
     @property
-    def hour(self):
+    def hour(self) -> Self:
         if self.interval != 1:
             raise IntervalError("Use hours instead of hour")
         return self.hours
 
     @property
-    def hours(self):
+    def hours(self) -> Self:
         self.unit = "hours"
         return self
 
     @property
-    def day(self):
+    def day(self) -> Self:
         if self.interval != 1:
             raise IntervalError("Use days instead of day")
         return self.days
 
     @property
-    def days(self):
+    def days(self) -> Self:
         self.unit = "days"
         return self
 
     @property
-    def week(self):
+    def week(self) -> Self:
         if self.interval != 1:
             raise IntervalError("Use weeks instead of week")
         return self.weeks
 
     @property
-    def weeks(self):
+    def weeks(self) -> Self:
         self.unit = "weeks"
         return self
 
     @property
-    def monday(self):
+    def monday(self) -> Self:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .monday() jobs is only allowed for weekly jobs. "
@@ -415,7 +415,7 @@ class Job:
         return self.weeks
 
     @property
-    def tuesday(self):
+    def tuesday(self) -> Self:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .tuesday() jobs is only allowed for weekly jobs. "
@@ -426,7 +426,7 @@ class Job:
         return self.weeks
 
     @property
-    def wednesday(self):
+    def wednesday(self) -> Self:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .wednesday() jobs is only allowed for weekly jobs. "
@@ -437,7 +437,7 @@ class Job:
         return self.weeks
 
     @property
-    def thursday(self):
+    def thursday(self) -> Self:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .thursday() jobs is only allowed for weekly jobs. "
@@ -448,7 +448,7 @@ class Job:
         return self.weeks
 
     @property
-    def friday(self):
+    def friday(self) -> Self:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .friday() jobs is only allowed for weekly jobs. "
@@ -459,7 +459,7 @@ class Job:
         return self.weeks
 
     @property
-    def saturday(self):
+    def saturday(self) -> Self:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .saturday() jobs is only allowed for weekly jobs. "
@@ -470,7 +470,7 @@ class Job:
         return self.weeks
 
     @property
-    def sunday(self):
+    def sunday(self) -> Self:
         if self.interval != 1:
             raise IntervalError(
                 "Scheduling .sunday() jobs is only allowed for weekly jobs. "
@@ -480,7 +480,7 @@ class Job:
         self.start_day = "sunday"
         return self.weeks
 
-    def tag(self, *tags: Hashable):
+    def tag(self, *tags: Hashable) -> Self:
         """
         Tags the job with one or more unique identifiers.
 
@@ -494,7 +494,7 @@ class Job:
         self.tags.update(tags)
         return self
 
-    def at(self, time_str: str, tz: Union[str, datetime.tzinfo, None] = None) -> "Job":
+    def at(self, time_str: str, tz: str | datetime.tzinfo | None = None) -> Self:
         """
         Specify a particular time that the job should be run at.
 
@@ -543,9 +543,9 @@ class Job:
                     "Invalid time format for a minutely job (valid format is :SS)"
                 )
         time_values = time_str.split(":")
-        hour: Union[str, int]
-        minute: Union[str, int]
-        second: Union[str, int]
+        hour: str | int
+        minute: str | int
+        second: str | int
         if len(time_values) == 3:
             hour, minute, second = time_values
         elif len(time_values) == 2 and self.unit == "minutes":
@@ -579,7 +579,7 @@ class Job:
         self.at_time = at_time
         return self
 
-    def to(self, latest: int):
+    def to(self, latest: float) -> Self:
         """
         Schedule the job to run at an irregular (randomized) interval.
 
@@ -596,8 +596,8 @@ class Job:
 
     def until(
         self,
-        until_time: Union[datetime.datetime, datetime.timedelta, datetime.time, str],
-    ):
+        until_time: datetime.datetime | datetime.timedelta | datetime.time | str,
+    ) -> Self:
         """
         Schedule job to run until the specified moment.
 
@@ -623,7 +623,7 @@ class Job:
         :return: The invoked job instance
         """
 
-        cancel_after: Optional[datetime.datetime]
+        cancel_after: datetime.datetime | None
         if isinstance(until_time, datetime.datetime):
             cancel_after = until_time
         elif isinstance(until_time, datetime.timedelta):
@@ -668,7 +668,7 @@ class Job:
         self.cancel_after = cancel_after
         return self
 
-    def do(self, job_func: Callable, *args, **kwargs):
+    def do(self, job_func: Callable[..., Any], *args: Any, **kwargs: Any) -> Self:
         """
         Specifies the job_func that should be called every time the
         job runs.
@@ -699,7 +699,7 @@ class Job:
         assert self._next_run is not None, "must run _schedule_next_run before"
         return _now_utc() >= self._next_run
 
-    def run(self):
+    def run(self) -> Any:
         """
         Run the job and immediately reschedule it.
         If the job's deadline is reached (configured using .until()), the job is not
@@ -716,10 +716,12 @@ class Job:
             return CancelJob
 
         logger.debug("Running job %s", self)
+        assert self.job_func is not None, "must call do() before running a job"
         ret = self.job_func()
         self.last_run = datetime.datetime.now()
         self._schedule_next_run()
 
+        assert self._next_run is not None
         if self._is_overdue(self._next_run):
             logger.debug("Cancelling job %s", self)
             return CancelJob
@@ -790,15 +792,15 @@ class Job:
 
         self._next_run = next_run
 
-    def _is_overdue(self, when: datetime.datetime):
+    def _is_overdue(self, when: datetime.datetime) -> bool:
         if self.cancel_after is None:
             return False
         # Compare in UTC; naive datetimes are in local time.
         return when.astimezone(_UTC) > self.cancel_after.astimezone(_UTC)
 
     def _decode_datetimestr(
-        self, datetime_str: str, formats: List[str]
-    ) -> Optional[datetime.datetime]:
+        self, datetime_str: str, formats: list[str]
+    ) -> datetime.datetime | None:
         for f in formats:
             try:
                 return datetime.datetime.strptime(datetime_str, f)
@@ -817,7 +819,7 @@ default_scheduler = Scheduler()
 jobs = default_scheduler.jobs  # todo: should this be a copy, e.g. jobs()?
 
 
-def every(interval: int = 1) -> Job:
+def every(interval: float = 1) -> Job:
     """Calls :meth:`every <Scheduler.every>` on the
     :data:`default scheduler instance <default_scheduler>`.
     """
@@ -831,21 +833,21 @@ def run_pending() -> None:
     default_scheduler.run_pending()
 
 
-def run_all(delay_seconds: int = 0) -> None:
+def run_all(delay_seconds: float = 0) -> None:
     """Calls :meth:`run_all <Scheduler.run_all>` on the
     :data:`default scheduler instance <default_scheduler>`.
     """
     default_scheduler.run_all(delay_seconds=delay_seconds)
 
 
-def get_jobs(tag: Optional[Hashable] = None) -> List[Job]:
+def get_jobs(tag: Hashable | None = None) -> list[Job]:
     """Calls :meth:`get_jobs <Scheduler.get_jobs>` on the
     :data:`default scheduler instance <default_scheduler>`.
     """
     return default_scheduler.get_jobs(tag)
 
 
-def clear(tag: Optional[Hashable] = None) -> None:
+def clear(tag: Hashable | None = None) -> None:
     """Calls :meth:`clear <Scheduler.clear>` on the
     :data:`default scheduler instance <default_scheduler>`.
     """
@@ -859,21 +861,24 @@ def cancel_job(job: Job) -> None:
     default_scheduler.cancel_job(job)
 
 
-def next_run(tag: Optional[Hashable] = None) -> Optional[datetime.datetime]:
+def next_run(tag: Hashable | None = None) -> datetime.datetime | None:
     """Calls :meth:`next_run <Scheduler.next_run>` on the
     :data:`default scheduler instance <default_scheduler>`.
     """
     return default_scheduler.get_next_run(tag)
 
 
-def idle_seconds() -> Optional[float]:
+def idle_seconds() -> float | None:
     """Calls :meth:`idle_seconds <Scheduler.idle_seconds>` on the
     :data:`default scheduler instance <default_scheduler>`.
     """
     return default_scheduler.idle_seconds
 
 
-def repeat(job, *args, **kwargs):
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def repeat(job: Job, *args: Any, **kwargs: Any) -> Callable[[_F], _F]:
     """
     Decorator to schedule a new periodic job.
 
@@ -883,16 +888,14 @@ def repeat(job, *args, **kwargs):
     :param job: a :class:`Jobs <Job>`
     """
 
-    def _schedule_decorator(decorated_function):
+    def _schedule_decorator(decorated_function: _F) -> _F:
         job.do(decorated_function, *args, **kwargs)
         return decorated_function
 
     return _schedule_decorator
 
 
-def _random_interval(
-    earliest: Union[int, float], latest: Union[int, float]
-) -> Union[int, float]:
+def _random_interval(earliest: float, latest: float) -> float:
     """
     Pick a random interval between `earliest` and `latest`, inclusive.
 
@@ -908,7 +911,7 @@ def _random_interval(
 _UTC = datetime.timezone.utc
 
 
-def _parse_timezone(tz: Union[str, datetime.tzinfo]) -> datetime.tzinfo:
+def _parse_timezone(tz: str | datetime.tzinfo) -> datetime.tzinfo:
     if isinstance(tz, datetime.tzinfo):
         return tz
     if not isinstance(tz, str):
@@ -936,7 +939,9 @@ def _now_utc() -> datetime.datetime:
     return datetime.datetime.now(_UTC)
 
 
-def _wall_clock(moment: datetime.datetime, tz) -> datetime.datetime:
+def _wall_clock(
+    moment: datetime.datetime, tz: datetime.tzinfo | None
+) -> datetime.datetime:
     """
     The naive wall-clock time of a UTC moment in `tz`, or in local time if
     `tz` is None.
@@ -944,7 +949,7 @@ def _wall_clock(moment: datetime.datetime, tz) -> datetime.datetime:
     return moment.astimezone(tz).replace(tzinfo=None)
 
 
-def _localize(wall: datetime.datetime, tz) -> datetime.datetime:
+def _localize(wall: datetime.datetime, tz: datetime.tzinfo | None) -> datetime.datetime:
     """
     The UTC moment at which the clock in `tz` shows the naive time `wall`.
     Local time is used if `tz` is None.
@@ -960,6 +965,7 @@ def _localize(wall: datetime.datetime, tz) -> datetime.datetime:
         # pytz timezones need localize() to pick the correct UTC offset.
         import pytz
 
+        aware: datetime.datetime
         try:
             aware = tz.localize(wall, is_dst=None)
         except pytz.AmbiguousTimeError:
@@ -970,7 +976,7 @@ def _localize(wall: datetime.datetime, tz) -> datetime.datetime:
     return wall.replace(tzinfo=tz, fold=0).astimezone(_UTC)
 
 
-def _move_to_next_weekday(moment: datetime.datetime, weekday: str):
+def _move_to_next_weekday(moment: datetime.datetime, weekday: str) -> datetime.datetime:
     """
     Move the given timestamp to the nearest given weekday. May be this week
     or next week. If the timestamp is already at the given weekday, it is not

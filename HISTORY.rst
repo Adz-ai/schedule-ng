@@ -9,6 +9,10 @@ History
 - **Require Python 3.11 or newer.** Python 3.9 and 3.10 have reached their end
   of life; pip keeps installing schedule-ng 1.3.1 on them.
 - Support Python 3.15, including the free-threaded build.
+- Fix and complete the type hints (#559). Intervals and ``to()`` accept
+  floats, ``at()`` accepts any ``tzinfo``, and the builder methods return
+  ``Self``, so chains on ``Job`` subclasses keep their type. The package now
+  passes ``mypy --strict``.
 - Document the Python support policy: every Python version that has not
   reached its end of life is supported, and a version is dropped in the first
   minor release after its end-of-life date.
