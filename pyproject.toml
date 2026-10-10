@@ -56,6 +56,7 @@ dev = [
   "tzdata; sys_platform == 'win32'",
   "ruff",
 ]
+docs = ["sphinx"]
 
 [tool.hatch.version]
 path = "schedule_ng/__init__.py"

@@ -6,7 +6,7 @@ To receive logs from Schedule, set the logging level to ``DEBUG``.
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
     import logging
 
     logging.basicConfig()
@@ -41,7 +41,7 @@ As an example, below code adds the ``print_elapsed_time`` decorator:
 
     import functools
     import time
-    import schedule
+    import schedule_ng as schedule
 
     # This decorator can be applied to any job function to log the elapsed time of each job
     def print_elapsed_time(func):

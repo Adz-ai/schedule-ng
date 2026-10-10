@@ -52,7 +52,7 @@ When the clock moves from ``01:00`` to ``02:00``, the job will run once at ``02:
 Example clock moves backwards:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 A job is scheduled ``.at("02:30", "Europe/Berlin")``.
-When the clock moves from ``02:00`` to ``03:00``, the job will run once at ``02:30``.
+When the clock moves back from ``03:00`` to ``02:00``, the job will run once at ``02:30``.
 It will run only at the first time the clock hits ``02:30``, but not the second time.
 The day after, it will return to normal and run at ``02:30``.
 

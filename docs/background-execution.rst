@@ -10,7 +10,7 @@ This is an example of how you could do this:
     import threading
     import time
 
-    import schedule
+    import schedule_ng as schedule
 
 
     def run_continuously(interval=1):

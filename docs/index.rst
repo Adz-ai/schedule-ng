@@ -2,8 +2,8 @@ schedule
 ========
 
 
-.. image:: https://github.com/dbader/schedule/workflows/Tests/badge.svg
-        :target: https://github.com/dbader/schedule/actions?query=workflow%3ATests+branch%3Amaster
+.. image:: https://github.com/Adz-ai/schedule-ng/actions/workflows/ci.yml/badge.svg
+        :target: https://github.com/Adz-ai/schedule-ng/actions/workflows/ci.yml
 
 .. image:: https://coveralls.io/repos/dbader/schedule/badge.svg?branch=master
         :target: https://coveralls.io/r/dbader/schedule
@@ -25,11 +25,11 @@ Python job scheduling for humans. Run Python functions (or any other callable) p
 
 .. code-block:: bash
 
-    $ pip install schedule
+    $ pip install schedule-ng
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
     import time
 
     def job():
@@ -93,7 +93,7 @@ Read More
 Issues
 ------
 
-If you encounter any problems, please `file an issue <http://github.com/dbader/schedule/issues>`_ along with a detailed description.
+If you encounter any problems, please `file an issue <https://github.com/Adz-ai/schedule-ng/issues>`_ along with a detailed description.
 Please also use the search feature in the issue tracker beforehand to avoid creating duplicates. Thank you 😃
 
 About Schedule

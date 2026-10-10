@@ -75,5 +75,5 @@ How to continuously run the scheduler without blocking the main thread?
 
 Another question?
 -----------------
-If you are left with an unanswered question, `browse the issue tracker <http://github.com/dbader/schedule/issues>`_ to see if your question has been asked before.
+If you are left with an unanswered question, `browse the issue tracker <https://github.com/Adz-ai/schedule-ng/issues>`_ to see if your question has been asked before.
 Feel free to create a new issue if that's not the case. Thank you 😃

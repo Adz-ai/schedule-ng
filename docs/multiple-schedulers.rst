@@ -8,7 +8,7 @@ This is supported:
 .. code-block:: python
 
     import time
-    import schedule
+    import schedule_ng as schedule
 
     def fooJob():
         print("Foo")

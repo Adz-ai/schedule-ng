@@ -11,7 +11,7 @@ You can work around this limitation by running each of the jobs in its own threa
 
     import threading
     import time
-    import schedule
+    import schedule_ng as schedule
 
     def job():
         print("I'm running on thread %s" % threading.current_thread())
@@ -37,7 +37,7 @@ If you want tighter control on the number of threads use a shared jobqueue and o
 
     import time
     import threading
-    import schedule
+    import schedule_ng as schedule
     import queue
 
     def job():

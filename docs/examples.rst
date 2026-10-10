@@ -9,7 +9,7 @@ Run a job every x minute
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
     import time
 
     def job():
@@ -74,7 +74,7 @@ Pass arguments to a job
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
 
     def greet(name):
         print('Hello', name)
@@ -96,7 +96,7 @@ To remove a job from the scheduler, use the ``schedule.cancel_job(job)`` method
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
 
     def some_task():
         print('Hello world')
@@ -112,7 +112,7 @@ Return ``schedule.CancelJob`` from a job to remove it from the scheduler.
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
     import time
 
     def job_that_executes_once():
@@ -132,7 +132,7 @@ To retrieve all jobs from the scheduler, use ``schedule.get_jobs()``
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
 
     def hello():
         print('Hello world')
@@ -148,7 +148,7 @@ To remove all jobs from the scheduler, use ``schedule.clear()``
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
 
     def greet(name):
         print('Hello {}'.format(name))
@@ -165,7 +165,7 @@ You can retrieve a group of jobs from the scheduler, selecting them by a unique 
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
 
     def greet(name):
         print('Hello {}'.format(name))
@@ -187,7 +187,7 @@ You can cancel the scheduling of a group of jobs selecting them by a unique iden
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
 
     def greet(name):
         print('Hello {}'.format(name))
@@ -221,7 +221,7 @@ Run a job until a certain time
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
     from datetime import datetime, timedelta, time
 
     def job():
@@ -252,7 +252,7 @@ Returns ``None`` if no jobs are scheduled.
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
     import time
 
     def job():
@@ -278,7 +278,7 @@ Jobs are re-scheduled after finishing, just like they would if they were execute
 
 .. code-block:: python
 
-    import schedule
+    import schedule_ng as schedule
 
     def job_1():
         print('Foo')

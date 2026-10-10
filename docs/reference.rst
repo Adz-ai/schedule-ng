@@ -1,7 +1,7 @@
 Reference
 =========
 
-.. module:: schedule
+.. module:: schedule_ng
 
 This part of the documentation covers all the interfaces of schedule.
 
@@ -24,11 +24,11 @@ Main Interface
 Classes
 -------
 
-.. autoclass:: schedule.Scheduler
+.. autoclass:: schedule_ng.Scheduler
    :members:
    :undoc-members:
 
-.. autoclass:: schedule.Job
+.. autoclass:: schedule_ng.Job
    :members:
    :undoc-members:
 
@@ -36,4 +36,4 @@ Classes
 Exceptions
 ----------
 
-.. autoexception:: schedule.CancelJob
+.. autoexception:: schedule_ng.CancelJob
