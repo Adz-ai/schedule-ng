@@ -73,6 +73,12 @@ addopts = "--strict-markers"
 source = ["schedule_ng"]
 branch = true
 
+[tool.coverage.report]
+# CI fails below this. Test new code, or delete code that can't be reached;
+# don't exclude it with "pragma: no cover".
+fail_under = 100
+show_missing = true
+
 [tool.mypy]
 files = ["schedule_ng", "typing_examples.py"]
 strict = true

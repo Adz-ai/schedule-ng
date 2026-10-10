@@ -35,6 +35,9 @@ time change was involved.
 1. Set up a development environment as described in the
    [development guide](https://schedule-ng.readthedocs.io/en/latest/development.html).
 2. **Bug fixes need a test that fails without the fix.** Features need tests too.
+   Coverage must stay at 100% of lines and branches; CI fails otherwise. Test
+   behaviour a user could notice, and delete code that can't be reached instead
+   of excluding it with `# pragma: no cover`.
 3. Keep pull requests focused on one change.
 4. Add an entry to `HISTORY.rst` for anything users will notice.
 5. Make sure `uv run pytest`, `uv run ruff check`, `uv run ruff format --check`
