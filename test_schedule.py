@@ -345,6 +345,25 @@ class SchedulerTests(TestCase):
         with self.assertRaises(IntervalError):
             every(interval=2).sunday
 
+    def test_until_timezone_aware_datetime(self):
+        utc = datetime.timezone.utc
+        # Local time is Berlin (UTC+1 in January), so 12:00 local is 11:00 UTC.
+        with mock_datetime(2024, 1, 1, 12, 0, 0):
+            deadline = datetime.datetime(2024, 1, 1, 12, 30, tzinfo=utc)
+            mock_job = make_mock_job()
+            job = every().hour.until(deadline).do(mock_job)
+            assert job.cancel_after == deadline
+
+            with self.assertRaises(ScheduleValueError):
+                every().hour.until(datetime.datetime(2024, 1, 1, 10, 30, tzinfo=utc))
+
+        # 13:00 local is 12:00 UTC, before the deadline: the job runs, and is
+        # then cancelled because its next run (14:00 local) is past the deadline.
+        with mock_datetime(2024, 1, 1, 13, 0, 0):
+            schedule.run_pending()
+            assert mock_job.call_count == 1
+            assert job not in schedule.jobs
+
     def test_until_time(self):
         mock_job = make_mock_job()
         # Check argument parsing
