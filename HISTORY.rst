@@ -12,6 +12,10 @@ First release of schedule-ng, a maintained fork of schedule 1.2.2.
   The API and the ``"schedule"`` logger name are unchanged.
 - Require Python 3.9 or newer; test on Python 3.9 to 3.14 (including free-threaded 3.14t)
   on Linux, macOS and Windows.
+- ``.at()`` accepts any ``tzinfo`` object for its timezone, such as
+  ``zoneinfo.ZoneInfo`` or ``datetime.timezone``, not only pytz timezones.
+  Timezone names no longer require pytz: they are looked up with pytz if it is
+  installed, and with ``zoneinfo`` otherwise.
 - Make the test suite run on Windows.
 - Replace setup.py, setup.cfg and tox with a single pyproject.toml.
 

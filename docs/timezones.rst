@@ -6,35 +6,37 @@ Timezone in .at()
 
 Schedule supports setting the job execution time in another timezone using the ``.at`` method.
 
-**To work with timezones** `pytz <https://pypi.org/project/pytz/>`_ **must be installed!** Get it:
-
-.. code-block:: bash
-
-    pip install pytz
-
 Timezones are only available in the ``.at`` function, like so:
 
 .. code-block:: python
 
-    # Pass a timezone as a string
+    # Pass a timezone name
     schedule.every().day.at("12:42", "Europe/Amsterdam").do(job)
 
-    # Pass an pytz timezone object
-    from pytz import timezone
-    schedule.every().friday.at("12:42", timezone("Africa/Lagos")).do(job)
+    # Pass any tzinfo object, such as a zoneinfo timezone
+    from zoneinfo import ZoneInfo
+    schedule.every().friday.at("12:42", ZoneInfo("Africa/Lagos")).do(job)
 
-Schedule uses the timezone to calculate the next runtime in local time.
-All datetimes inside the library are stored `naive <https://docs.python.org/3/library/datetime.html>`_.
-This causes the ``next_run`` and ``last_run`` to always be in Pythons local timezone.
+Timezone names are looked up with `pytz <https://pypi.org/project/pytz/>`_ if it is installed,
+and with Python's built-in :mod:`zoneinfo` otherwise.
+On Windows, zoneinfo needs the `tzdata <https://pypi.org/project/tzdata/>`_ package:
+
+.. code-block:: bash
+
+    pip install tzdata
+
+Schedule uses the timezone to calculate the next run.
+``next_run`` and ``last_run`` are `naive <https://docs.python.org/3/library/datetime.html>`_ datetimes
+in Python's local timezone.
 
 Daylight Saving Time
 ~~~~~~~~~~~~~~~~~~~~
-Scheduling jobs that do not specify a timezone do **not** take clock-changes into account.
-Timezone unaware jobs will use naive local times to calculate the next run.
-For example, a job that is set to run every 4 hours might execute after 3 realtime hours when DST goes into effect.
+Intervals in seconds, minutes and hours measure elapsed time.
+A job that runs every 4 hours runs every 4 real hours, also when the clock changes.
 
-But when passing a timezone to ``.at()``, DST **is** taken into account.
-The job will run at the specified time, even when the clock changes.
+Days and weeks follow the clock: a job that runs every day at 10:30 runs at 10:30,
+in the timezone given to ``.at()`` or in local time.
+The rules below apply to both.
 
 Example clock moves forward:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

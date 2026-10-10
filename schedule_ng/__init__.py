@@ -244,7 +244,7 @@ class Job:
         self.at_time: Optional[datetime.time] = None
 
         # optional time zone of the self.at_time field. Only relevant when at_time is not None
-        self.at_time_zone = None
+        self.at_time_zone: Optional[datetime.tzinfo] = None
 
         # datetime of the last run
         self.last_run: Optional[datetime.datetime] = None
@@ -493,7 +493,7 @@ class Job:
         self.tags.update(tags)
         return self
 
-    def at(self, time_str: str, tz: Optional[str] = None):
+    def at(self, time_str: str, tz: Union[str, datetime.tzinfo, None] = None) -> "Job":
         """
         Specify a particular time that the job should be run at.
 
@@ -510,8 +510,11 @@ class Job:
             selected time-unit (e.g. `every().hour.at(':30')` vs.
             `every().minute.at(':30')`).
 
-        :param tz: The timezone that this timestamp refers to. Can be
-            a string that can be parsed by pytz.timezone(), or a pytz.BaseTzInfo object
+        :param tz: The timezone that this timestamp refers to. Can be a
+            timezone name such as ``"Europe/Amsterdam"``, or a
+            :class:`datetime.tzinfo` such as a :class:`zoneinfo.ZoneInfo` or
+            pytz timezone. Names are looked up with pytz if it is installed,
+            and with :mod:`zoneinfo` otherwise.
 
         :return: The invoked job instance
         """
@@ -570,16 +573,7 @@ class Job:
         second = int(second)
         at_time = datetime.time(hour, minute, second)
         if tz is not None:
-            import pytz
-
-            if isinstance(tz, str):
-                self.at_time_zone = pytz.timezone(tz)  # type: ignore
-            elif isinstance(tz, pytz.BaseTzInfo):
-                self.at_time_zone = tz
-            else:
-                raise ScheduleValueError(
-                    "Timezone must be string or pytz.timezone object"
-                )
+            self.at_time_zone = _parse_timezone(tz)
 
         self.at_time = at_time
         return self
@@ -911,6 +905,30 @@ def _random_interval(
 
 
 _UTC = datetime.timezone.utc
+
+
+def _parse_timezone(tz: Union[str, datetime.tzinfo]) -> datetime.tzinfo:
+    if isinstance(tz, datetime.tzinfo):
+        return tz
+    if not isinstance(tz, str):
+        raise ScheduleValueError("Timezone must be a string or a tzinfo object")
+    try:
+        import pytz
+    except ModuleNotFoundError:
+        pass
+    else:
+        # Prefer pytz when installed, for compatibility with schedule 1.2.
+        return pytz.timezone(tz)
+
+    import zoneinfo
+
+    try:
+        return zoneinfo.ZoneInfo(tz)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError) as e:
+        raise ScheduleValueError(
+            "Unknown timezone {!r}. On Windows, install the tzdata package "
+            "for timezone names to work.".format(tz)
+        ) from e
 
 
 def _now_utc() -> datetime.datetime:

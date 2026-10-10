@@ -1887,3 +1887,61 @@ class DaylightSavingTimeTests(TestCase):
             scheduler.every().day.at("02:30", "America/New_York").do(make_mock_job())
         runs = poll_across(scheduler, TZ_UTC, utc(2024, 3, 9, 12), utc(2024, 3, 11, 12))
         self.assertEqual(runs, [utc(2024, 3, 10, 7, 30), utc(2024, 3, 11, 6, 30)])
+
+
+class ZoneInfoTests(TestCase):
+    """at() with zoneinfo and other tzinfo objects, without needing pytz."""
+
+    def setUp(self):
+        schedule.clear()
+
+    def test_zoneinfo_object(self):
+        with mock_datetime(2022, 4, 8, 10, 0):
+            # Berlin 10:00 (CEST) is New York 04:00 (EDT); 10:30 in New York
+            # is 16:30 in Berlin.
+            tz = ZoneInfo("America/New_York")
+            job = every().day.at("10:30", tz).do(make_mock_job())
+            assert job.at_time_zone is tz
+            assert job.next_run == datetime.datetime(2022, 4, 8, 16, 30)
+
+    def test_zoneinfo_dst_differs_between_zones(self):
+        with mock_datetime(2022, 3, 20, 10, 0):
+            # New York is already on summer time, Berlin is not yet.
+            tz = ZoneInfo("America/New_York")
+            job = every().day.at("10:30", tz).do(make_mock_job())
+            assert job.next_run == datetime.datetime(2022, 3, 20, 15, 30)
+
+    def test_fixed_offset_timezone(self):
+        with mock_datetime(2022, 1, 10, 10, 0):
+            tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+            job = every().day.at("18:00", tz).do(make_mock_job())
+            # 18:00 at UTC+05:30 is 12:30 UTC, 13:30 in Berlin (CET).
+            assert job.next_run == datetime.datetime(2022, 1, 10, 13, 30)
+
+    def test_hourly_job_in_half_hour_offset_zone(self):
+        with mock_datetime(2022, 1, 10, 10, 0):
+            # In India (UTC+05:30) it is 14:30, so :15 next comes at 15:15,
+            # which is 10:45 in Berlin.
+            job = every().hour.at(":15", ZoneInfo("Asia/Kolkata")).do(make_mock_job())
+            assert job.next_run == datetime.datetime(2022, 1, 10, 10, 45)
+
+    def test_zoneinfo_dst_gap(self):
+        scheduler = schedule.Scheduler()
+        with mock_datetime(2024, 3, 9, 12, 0, zone=TZ_UTC):
+            scheduler.every().day.at("02:30", ZoneInfo("America/New_York")).do(
+                make_mock_job()
+            )
+        runs = poll_across(scheduler, TZ_UTC, utc(2024, 3, 9, 12), utc(2024, 3, 11, 12))
+        self.assertEqual(runs, [utc(2024, 3, 10, 7, 30), utc(2024, 3, 11, 6, 30)])
+
+    def test_timezone_name_without_pytz(self):
+        with mock.patch.dict("sys.modules", {"pytz": None}):
+            job = every().day.at("10:30", "America/New_York")
+            assert job.at_time_zone == ZoneInfo("America/New_York")
+
+            with self.assertRaisesRegex(ScheduleValueError, "Unknown timezone"):
+                every().day.at("10:30", "FakeZone")
+
+    def test_invalid_timezone_type(self):
+        with self.assertRaisesRegex(ScheduleValueError, "string or a tzinfo"):
+            every().day.at("10:30", 43)
