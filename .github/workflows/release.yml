@@ -45,3 +45,40 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  # Runs after the PyPI upload, so a GitHub release only appears once the
+  # version is on PyPI. The files are signed with Sigstore so they can be
+  # verified without trusting GitHub's download servers.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write # create the release
+      id-token: write # sign with Sigstore
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
+        with:
+          inputs: ./dist/*.tar.gz ./dist/*.whl
+          # Only applies to release events; the next step uploads the files.
+          release-signing-artifacts: false
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > notes.md <<NOTES
+          Changelog: https://schedule-ng.readthedocs.io/en/latest/changelog.html
+
+          The files below are signed with [Sigstore](https://www.sigstore.dev/). To verify one:
+
+          \`\`\`
+          pip install sigstore
+          python -m sigstore verify identity schedule_ng-${TAG#v}-py3-none-any.whl --cert-oidc-issuer https://token.actions.githubusercontent.com --cert-identity https://github.com/$GITHUB_REPOSITORY/.github/workflows/release.yml@refs/tags/$TAG
+          \`\`\`
+          NOTES
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "schedule-ng ${TAG#v}" --notes-file notes.md
