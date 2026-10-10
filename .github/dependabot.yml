@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Keep the GitHub Actions used in CI and releases up to date, in one
+  # weekly PR so updates are reviewed together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
