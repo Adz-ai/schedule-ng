@@ -1460,6 +1460,10 @@ class SchedulerTests(TestCase):
         s3 = repr(schedule.every(10))
         assert s3 == "Every 10 None do [None] (last run: [never], next run: [never])"
 
+        # Ensure repr does not crash when interval is 1 and unit is None
+        s4 = repr(schedule.every(1))
+        assert s4 == "Every 1 None do [None] (last run: [never], next run: [never])"
+
     def test_to_string_lambda_job_func(self):
         assert len(str(every().minute.do(lambda: 1))) > 1
         assert len(str(every().day.at("10:30").do(lambda: 1))) > 1
