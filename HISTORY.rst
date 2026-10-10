@@ -3,7 +3,7 @@
 History
 -------
 
-1.3.0 (unreleased)
+1.3.0 (2026-10-10)
 ++++++++++++++++++
 
 First release of schedule-ng, a maintained fork of schedule 1.2.2.
