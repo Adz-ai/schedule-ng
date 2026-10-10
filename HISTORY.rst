@@ -3,7 +3,7 @@
 History
 -------
 
-1.5.0 (unreleased)
+1.5.0 (2026-10-10)
 ++++++++++++++++++
 
 Issue numbers refer to the original
@@ -18,6 +18,9 @@ Issue numbers refer to the original
   ``every(5).minutes.between("09:00", "17:00")`` runs only from 09:00 to
   17:00, both included. The window can cross midnight, have its own timezone,
   and be combined with ``.weekday`` and ``.weekend``.
+- GitHub releases now include the sdist and wheel, signed with
+  `Sigstore <https://www.sigstore.dev/>`_. The release notes show how to
+  verify them.
 
 1.4.0 (2026-10-10)
 ++++++++++++++++++

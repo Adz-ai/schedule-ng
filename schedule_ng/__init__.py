@@ -49,7 +49,7 @@ import time
 from collections.abc import Callable
 from typing import Any, Self, TypeVar
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 logger = logging.getLogger("schedule")
 
