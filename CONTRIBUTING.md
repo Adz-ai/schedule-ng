@@ -12,6 +12,8 @@ human-friendly API, and a drop-in replacement for
 - **Backward compatibility comes first.** Code written for schedule 1.2 should
   keep working. Behaviour changes need a strong reason and a changelog entry.
 - **No required dependencies.**
+- **Supported Python versions** are those that haven't reached their end of life.
+  A version is dropped in the first minor release after its end-of-life date.
 - **Small scope.** Features such as job persistence, retries, distributed
   execution or a full cron syntax are out of scope. If you need those,
   [APScheduler](https://github.com/agronholm/apscheduler) is a great choice.

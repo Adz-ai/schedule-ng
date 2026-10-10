@@ -3,6 +3,7 @@
 import datetime
 import functools
 import io
+import itertools
 import struct
 from unittest import mock, TestCase
 from zoneinfo import ZoneInfo
@@ -1453,7 +1454,7 @@ class SchedulerTests(TestCase):
 
         descriptions = [str(job) for job in schedule.get_jobs()]
         assert len(set(descriptions)) == 6
-        for minute, description in zip(range(0, 60, 10), descriptions):
+        for minute, description in zip(range(0, 60, 10), descriptions, strict=True):
             assert description == (
                 "Job(interval=1, unit=hours, at=00:{:02d}:00, "
                 "do=job, args=(), kwargs={{}})"
@@ -1811,7 +1812,7 @@ class DaylightSavingTimeTests(TestCase):
     # (01:00 UTC).
 
     def assert_runs_every(self, runs, interval):
-        gaps = {b - a for a, b in zip(runs, runs[1:])}
+        gaps = {b - a for a, b in itertools.pairwise(runs)}
         self.assertEqual(gaps, {interval}, runs)
 
     def test_interval_jobs_keep_running_when_clocks_go_back(self):

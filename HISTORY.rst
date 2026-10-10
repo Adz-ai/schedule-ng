@@ -3,6 +3,16 @@
 History
 -------
 
+1.4.0 (unreleased)
+++++++++++++++++++
+
+- **Require Python 3.11 or newer.** Python 3.9 and 3.10 have reached their end
+  of life; pip keeps installing schedule-ng 1.3.1 on them.
+- Support Python 3.15, including the free-threaded build.
+- Document the Python support policy: every Python version that has not
+  reached its end of life is supported, and a version is dropped in the first
+  minor release after its end-of-life date.
+
 1.3.1 (2026-10-10)
 ++++++++++++++++++
 
