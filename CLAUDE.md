@@ -34,8 +34,10 @@ uv run mypy                      # types
 uv run --only-group docs --with-editable . sphinx-build -W -b html docs docs/_build/html
 ```
 
-CI must stay green on Linux, macOS and Windows for Python 3.9 to 3.14, including free-threaded 3.14t.
-Code must run on Python 3.9: no `match`, no `X | Y` type unions evaluated at runtime.
+CI must stay green on Linux, macOS and Windows for Python 3.11 to 3.15, including the free-threaded builds.
+Code must run on the oldest supported Python (`requires-python` in `pyproject.toml`). Python versions
+are dropped in the first minor release after their end of life, never in a patch release. Don't
+rewrite working code just to use newer syntax; use it in code that is changing anyway.
 
 ## How scheduling works
 

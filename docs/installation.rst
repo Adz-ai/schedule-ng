@@ -6,9 +6,24 @@ Python version support
 ######################
 
 We recommend using the latest version of Python.
-schedule-ng is tested on Python 3.9 to 3.14 on Linux, macOS and Windows.
+schedule-ng is tested on Python 3.11 to 3.15 on Linux, macOS and Windows,
+including the free-threaded builds.
 
-Want to use Schedule on earlier Python versions? See the History.
+schedule-ng supports every Python version that has not reached its
+`end of life <https://devguide.python.org/versions/>`_. Support for a version
+is dropped in the first minor release after its end-of-life date, never in a
+patch release. pip installs the newest release that supports your Python, so
+older Python versions keep working with older releases:
+
+=================  ======================
+Python             Latest schedule-ng
+=================  ======================
+3.11 and newer     latest
+3.9, 3.10          1.3.1
+=================  ======================
+
+For Python 3.8 or older, use the original
+`schedule <https://pypi.org/project/schedule/>`_ 1.2.2.
 
 
 Dependencies
